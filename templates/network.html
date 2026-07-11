@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Network | Observa{% endblock title %}
+
+{% block content %}
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Interfaces</h2>
+  </div>
+  {% include "partials/network_cards.html" %}
+
+  <details class="verify-details">
+    <summary>Raw data — interfaces</summary>
+    <div class="verify-body">
+      <div class="verify-table-wrapper">
+        <table class="verify-table">
+          <thead>
+            <tr><th>Interface</th><th>RX bytes</th><th>TX bytes</th><th>RX rate</th><th>TX rate</th></tr>
+          </thead>
+          <tbody>
+            {% for net in networks %}
+            <tr>
+              <td>{{ net.name }}</td>
+              <td class="mono">{{ net.rx }}</td>
+              <td class="mono">{{ net.tx }}</td>
+              <td class="mono">{{ net.rx_rate }}</td>
+              <td class="mono">{{ net.tx_rate }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+{% if ports %}
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Open Listening Ports</h2>
+  </div>
+  <div class="log-table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Protocol</th>
+          <th>Local address</th>
+          <th>Port</th>
+          <th>Process</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in ports %}
+        <tr>
+          <td>{{ p.protocol }}</td>
+          <td>{{ p.local_addr }}</td>
+          <td>{{ p.local_port }}</td>
+          <td>{{ p.process }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if traffic %}
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Recent Network Traffic</h2>
+    <span class="section-meta">{{ traffic_count }} events</span>
+  </div>
+  <div class="log-table-container">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Source</th>
+          <th>Severity</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in traffic %}
+        <tr>
+          <td class="ts">{{ t.ts }}</td>
+          <td>{{ t.source }}</td>
+          <td><span class="severity-badge {{ t.severity_class }}">{{ t.severity }}</span></td>
+          <td>{{ t.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock content %}

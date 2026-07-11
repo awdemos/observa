@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Security | Observa{% endblock title %}
+
+{% block content %}
+<section class="panel panel-compact" id="security-panel">
+  <div class="section-header">
+    <h2>Security alerts <span class="count-pill" id="security-count">{{ alert_count }}</span></h2>
+    <div class="section-actions">
+      <button type="button" id="verify-chain-btn" class="btn btn-secondary">Verify chain</button>
+      <a href="/api/alerts/export" class="btn btn-secondary" download>Export JSON</a>
+    </div>
+  </div>
+
+  <div id="verify-chain-result" class="verify-result" aria-live="polite" hidden></div>
+
+  <form id="security-filter" class="log-filter security-filter"
+        hx-get="/partials/security"
+        hx-target="#security-rows"
+        hx-swap="innerHTML"
+        hx-trigger="change"
+        hx-indicator="#security-spinner">
+    <fieldset class="severity-filter" aria-label="Severity">
+      <label><input type="checkbox" name="severity" value="critical" {% if "critical" in filter_severities %}checked{% endif %}> critical</label>
+      <label><input type="checkbox" name="severity" value="error" {% if "error" in filter_severities %}checked{% endif %}> error</label>
+      <label><input type="checkbox" name="severity" value="warn" {% if "warn" in filter_severities %}checked{% endif %}> warn</label>
+      <label><input type="checkbox" name="severity" value="info" {% if "info" in filter_severities %}checked{% endif %}> info</label>
+      <label><input type="checkbox" name="severity" value="debug" {% if "debug" in filter_severities %}checked{% endif %}> debug</label>
+    </fieldset>
+    <span id="security-spinner" class="htmx-indicator" aria-hidden="true">●</span>
+  </form>
+
+  <div id="security-rows">
+    {% include "partials/security_rows.html" %}
+  </div>
+</section>
+{% endblock content %}

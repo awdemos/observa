@@ -1,0 +1,30 @@
+<div class="verify-table-wrapper">
+  <table class="verify-table">
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>CPU %</th>
+        <th>Memory used</th>
+        <th>Memory total</th>
+        <th>RX total</th>
+        <th>TX total</th>
+        <th>RX rate</th>
+        <th>TX rate</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for snap in metric_history %}
+      <tr>
+        <td class="mono">{{ snap.ts }}</td>
+        <td class="mono">{{ snap.cpu.usage_percent | round(method="floor", precision=1) }}%</td>
+        <td class="mono">{{ snap.memory.used_bytes }}</td>
+        <td class="mono">{{ snap.memory.total_bytes }}</td>
+        <td class="mono">{{ snap.networks | map(attribute="rx_bytes") | sum }}</td>
+        <td class="mono">{{ snap.networks | map(attribute="tx_bytes") | sum }}</td>
+        <td class="mono">{{ snap.networks | map(attribute="rx_rate") | sum | round(method="floor", precision=0) }}</td>
+        <td class="mono">{{ snap.networks | map(attribute="tx_rate") | sum | round(method="floor", precision=0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Storage | Observa{% endblock title %}
+
+{% block content %}
+{% if disks %}
+<section class="kpi-strip" id="storage-kpi-strip" aria-label="Storage summary">
+  <div class="metric-tile accent" data-metric="disks">
+    <div class="metric-label">Disks</div>
+    <div class="metric-value" id="storage-count-value">{{ disk_count }}</div>
+    <div class="metric-detail">Active block devices</div>
+  </div>
+  <div class="metric-tile" data-metric="usage">
+    <div class="metric-label">Highest Usage</div>
+    <div class="metric-value" id="storage-top-pct-value">{{ disks[0].pct | round(method="floor", precision=0) }}%</div>
+    <div class="metric-detail">{{ disks[0].name }}</div>
+  </div>
+  <div class="metric-tile" data-metric="total">
+    <div class="metric-label">Total Used</div>
+    <div class="metric-value" id="storage-total-used-value">{{ disks[0].used }}</div>
+    <div class="metric-detail">Top device</div>
+  </div>
+</section>
+
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Storage Devices</h2>
+    <span class="section-meta">Usage, I/O rates, and activity</span>
+  </div>
+  <div id="storage-cards">
+    {% include "partials/storage_cards.html" %}
+  </div>
+
+  <details class="verify-details">
+    <summary>Raw data — storage devices</summary>
+    <div class="verify-body">
+      <div class="verify-table-wrapper">
+        <table class="verify-table">
+          <thead>
+            <tr><th>Device</th><th>Used</th><th>Total</th><th>%</th><th>Read rate</th><th>Write rate</th></tr>
+          </thead>
+          <tbody>
+            {% for disk in disks %}
+            <tr>
+              <td>{{ disk.name }}</td>
+              <td class="mono">{{ disk.used }}</td>
+              <td class="mono">{{ disk.total }}</td>
+              <td class="mono">{{ disk.pct | round(method="floor", precision=1) }}%</td>
+              <td class="mono">{{ disk.read_rate }}</td>
+              <td class="mono">{{ disk.write_rate }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Recent Storage Events</h2>
+    <span class="section-meta">{{ storage_event_count }} recent logs</span>
+  </div>
+  <div id="storage-events-table" class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Source</th>
+          <th>Severity</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in storage_events %}
+        <tr class="log-row">
+          <td class="ts">{{ e.ts }}</td>
+          <td class="source">{{ e.source }}</td>
+          <td class="severity severity-{{ e.severity_class }}">{{ e.severity }}</td>
+          <td class="message">{{ e.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="panel empty-state">
+  <h2>No storage data yet</h2>
+  <p>Start the collector or wait for the next snapshot.</p>
+</section>
+{% endif %}
+{% endblock content %}

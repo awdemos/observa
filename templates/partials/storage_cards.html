@@ -1,0 +1,69 @@
+<script type="application/json" id="storage-data">
+[
+  {% for d in disks %}
+  {"name": "{{ d.name|json_escape }}", "pct": {{ d.pct }}, "read_rate": {{ d.read_rate_num }}, "write_rate": {{ d.write_rate_num }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+{% if has_swap %}
+<script type="application/json" id="swap-data">
+{"used": {{ swap.used_num }}, "total": {{ swap.total_num }}, "pct": {{ swap.pct }}}
+</script>
+{% endif %}
+{% if disks %}
+  <div class="storage-grid">
+    {% for d in disks %}
+      <div class="storage-card">
+        <div class="storage-header">
+          <span class="storage-name">{{ d.name }}</span>
+          <span class="storage-capacity">{{ d.used }} / {{ d.total }}</span>
+        </div>
+        <div class="storage-sparkline" aria-hidden="true">
+          {% for v in d.sparkline %}
+          <span class="spark-bar" style="height: {{ v }}%"></span>
+          {% endfor %}
+          <div class="three-viz" data-three-viz="disk" data-name="{{ d.name|json_escape }}" data-pct="{{ d.pct }}" data-read-rate="{{ d.read_rate_num }}" data-write-rate="{{ d.write_rate_num }}"></div>
+        </div>
+        <div class="storage-bar">
+          <div class="storage-fill" style="width: {{ d.pct }}%"></div>
+        </div>
+        <div class="storage-meta">
+          <span class="storage-pct">{{ d.pct | round(method="floor", precision=0) }}% used</span>
+          <span class="storage-rates">R {{ d.read_rate }} · W {{ d.write_rate }}</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% if has_swap %}
+  <div class="swap-card">
+    <div class="swap-header">
+      <span class="swap-name">Swap</span>
+      <span class="swap-capacity">{{ swap.used }} / {{ swap.total }}</span>
+    </div>
+    <div class="swap-viz" data-three-viz="swap" data-used="{{ swap.used_num }}" data-total="{{ swap.total_num }}" data-pct="{{ swap.pct }}"></div>
+    <div class="swap-bar">
+      <div class="swap-fill" style="width: {{ swap.pct }}%"></div>
+    </div>
+    <div class="swap-meta">
+      <span class="swap-pct">{{ swap.pct | round(method="floor", precision=0) }}% used</span>
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <p class="empty-state">No storage devices detected yet.</p>
+  {% if has_swap %}
+  <div class="swap-card">
+    <div class="swap-header">
+      <span class="swap-name">Swap</span>
+      <span class="swap-capacity">{{ swap.used }} / {{ swap.total }}</span>
+    </div>
+    <div class="swap-viz" data-three-viz="swap" data-used="{{ swap.used_num }}" data-total="{{ swap.total_num }}" data-pct="{{ swap.pct }}"></div>
+    <div class="swap-bar">
+      <div class="swap-fill" style="width: {{ swap.pct }}%"></div>
+    </div>
+    <div class="swap-meta">
+      <span class="swap-pct">{{ swap.pct | round(method="floor", precision=0) }}% used</span>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}

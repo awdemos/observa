@@ -1,0 +1,12 @@
+# Default config for local development. Leave llm_api_key unset to use the
+# built-in rule-based fallback responder; set it (even to a dummy value like
+# "unused" for a local llama-server) to opt into the OpenAI-compatible client.
+bind_addr = "127.0.0.1:3000"
+llm_api_base = "http://localhost:8080/v1"
+llm_model = "llama"
+sample_interval_ms = 2000
+log_source = "journald"
+log_tail = true
+# Optional: extra AI inference endpoints to probe for the AI Servers page.
+# Defaults include common Docker Compose service names and host loopback ports.
+# ai_server_endpoints = ["llama-server:8080", "ollama:11434"]

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}About | Observa{% endblock title %}
+
+{% block content %}
+<section class="hero">
+  <h1>About Observa</h1>
+  <p>What every number means, where the data comes from, and how to read the dashboard.</p>
+</section>
+
+<section class="panel">
+  <h2>Metrics Glossary</h2>
+  <dl class="glossary-list">
+    <dt>CPU usage</dt>
+    <dd>
+      Percentage of total CPU time currently in use across all cores. Sampled from
+      <code>sysinfo</code> on the host. Higher values mean more load.
+    </dd>
+
+    <dt>Per-core usage</dt>
+    <dd>
+      Individual CPU core utilization percentages. Useful for spotting single-core
+      saturation or uneven load distribution.
+    </dd>
+
+    <dt>CPU frequency</dt>
+    <dd>
+      Current clock speed in MHz. May fluctuate with power-saving or boost states.
+    </dd>
+
+    <dt>Memory used / free / total</dt>
+    <dd>
+      Physical RAM statistics. <strong>Used</strong> is what applications and caches are
+      consuming; <strong>free</strong> is unused; <strong>total</strong> is installed RAM.
+    </dd>
+
+    <dt>Memory %</dt>
+    <dd>
+      <code>used / total × 100</code>. High values do not always indicate a problem because
+      modern systems keep data in caches, but sustained growth can signal a leak.
+    </dd>
+
+    <dt>Swap</dt>
+    <dd>
+      Virtual memory backed by disk. Used when physical RAM is exhausted. Heavy swap usage
+      usually degrades performance.
+    </dd>
+
+    <dt>Disk usage</dt>
+    <dd>
+      Percentage of each block device's capacity that is allocated. Independent of read/write
+      activity.
+    </dd>
+
+    <dt>Disk read / write rate</dt>
+    <dd>
+      Current throughput for each disk in bytes per second. Spikes correlate with I/O-bound
+      workloads.
+    </dd>
+
+    <dt>Network RX / TX</dt>
+    <dd>
+      <strong>RX</strong> (receive) and <strong>TX</strong> (transmit) cumulative byte counters
+      since the interface came up. The dashboard also shows current rates in bytes per second.
+    </dd>
+
+    <dt>Process CPU / memory</dt>
+    <dd>
+      Per-process CPU percentage and resident memory. CPU is relative to one core; a process
+      can exceed 100% on multi-core systems.
+    </dd>
+
+    <dt>GPU usage / memory</dt>
+    <dd>
+      GPU compute utilization and VRAM usage when a compatible GPU is present and detectable.
+    </dd>
+
+    <dt>AI Servers</dt>
+    <dd>
+      Detected local inference processes (llama.cpp, vLLM, Ollama, Triton, etc.) identified
+      by process name and optional port hint.
+    </dd>
+
+    <dt>Severity</dt>
+    <dd>
+      Log/alert classification: <span class="severity-badge debug">Debug</span>,
+      <span class="severity-badge info">Info</span>,
+      <span class="severity-badge warn">Warn</span>,
+      <span class="severity-badge error">Error</span>,
+      <span class="severity-badge critical">Critical</span>.
+    </dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>Where the Data Comes From</h2>
+  <dl class="glossary-list">
+    <dt>System metrics</dt>
+    <dd>
+      Collected by the <code>observa-collector</code> crate using
+      <a href="https://docs.rs/sysinfo" target="_blank" rel="noopener">sysinfo</a>. Sampling
+      interval is configurable (default 2000 ms).
+    </dd>
+
+    <dt>Logs</dt>
+    <dd>
+      Ingested from <code>journalctl</code> when available, or from a configured fallback log
+      file. Parsed into structured events by <code>observa-ingestor</code>.
+    </dd>
+
+    <dt>Persistence</dt>
+    <dd>
+      SQLite stores metric history, logs, and chat sessions. Retention and optional zstd
+      compression are configurable.
+    </dd>
+
+    <dt>Cache</dt>
+    <dd>
+      Optional Redis layer speeds up recent lookups. If Redis is unavailable the server falls
+      back to in-memory caching.
+    </dd>
+
+    <dt>Live updates</dt>
+    <dd>
+      The <code>/events</code> endpoint streams Server-Sent Events (SSE) to the browser so
+      cards and tables update without a full page reload.
+    </dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>How to Read the Dashboard</h2>
+  <ul>
+    <li><strong>Live metrics</strong> update automatically via SSE when the status pill shows "live".</li>
+    <li><strong>High CPU / memory / disk %</strong> usually warrants investigation.</li>
+    <li><strong>High RX/TX rates</strong> are not inherently bad; compare them to the baseline for the workload.</li>
+    <li><strong>Swap activity</strong> often indicates memory pressure.</li>
+    <li><strong>Critical / Error logs</strong> are surfaced on the Security page.</li>
+    <li>Every chart and card has an expandable <em>Raw data</em> section so you can verify the exact numbers.</li>
+  </ul>
+</section>
+{% endblock content %}

@@ -1,0 +1,14 @@
+[workspace]
+members = [
+    "crates/observa-shared",
+    "crates/observa-config",
+    "crates/observa-cli",
+    "crates/observa-db",
+    "crates/observa-cache",
+    "crates/observa-bus",
+    "crates/observa-collector",
+    "crates/observa-ingestor",
+    "crates/observa-server",
+    "crates/observa-llm",
+]
+resolver = "2"

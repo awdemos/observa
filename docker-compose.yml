@@ -1,0 +1,86 @@
+services:
+  observa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: observa:latest
+    container_name: observa
+    # Use host networking so Observa can reach inference servers running on the
+    # host (e.g. Ollama on 127.0.0.1:11434). On Linux this lets Observa see the
+    # host's loopback interfaces directly. Port mappings are ignored in host mode.
+    network_mode: host
+    # Share the host PID namespace so sysinfo sees host processes and /proc/1
+    # refers to the host init, letting us stat host filesystems.
+    pid: host
+    environment:
+      - OBSERVA_BIND=0.0.0.0:3000
+      - OBSERVA_DATABASE_URL=sqlite:///data/observa.db
+      # With host networking, reach the llama-server container through its
+      # published host port (18080) instead of the Docker service name.
+      - OBSERVA_LLM_API_BASE=http://127.0.0.1:18080/v1
+      - OBSERVA_LLM_MODEL=llama
+      - OBSERVA_LLM_API_KEY=unused
+      - OBSERVA_LLM_TIMEOUT_SECS=120
+      - OBSERVA_CHAT_TIMEOUT_SECS=120
+      - OBSERVA_SAMPLE_INTERVAL_MS=2000
+      - OBSERVA_LOG_SOURCE=file
+      - OBSERVA_LOG_FILE=/data/logs/system.log
+      - OBSERVA_NO_TAIL=false
+      - RUST_LOG=info
+      # Point the collector at the host /proc bind-mount so it reports host
+      # memory instead of the container's cgroup limit.
+      - HOST_PROC=/host/proc
+    volumes:
+      - observa-data:/data
+      # Mount the host /proc read-only so Observa can read host memory, CPU,
+      # and process information from inside the container.
+      - /proc:/host/proc:ro
+    # templates/ and assets/ are baked into the image during build so the
+    # container's nonroot user always has consistent, readable files.
+    depends_on:
+      - llama-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    # Expose the NVIDIA GPU to the container via CDI so nvidia-smi works and
+    # GPU metrics can be collected. Requires nvidia-container-toolkit >= 1.14.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: cdi
+              device_ids:
+                - nvidia.com/gpu=all
+              capabilities:
+                - gpu
+
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: observa-llama-server
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./models:/models:ro
+    command:
+      - "--model"
+      - "/models/lowbit-2026/Qwen3-4B-Instruct-2507-Q2_K.gguf"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "--ctx-size"
+      - "4096"
+      - "--n-gpu-layers"
+      - "0"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 24g
+
+volumes:
+  observa-data:

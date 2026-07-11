@@ -1,0 +1,21 @@
+[package]
+name = "observa-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "observa"
+path = "src/main.rs"
+
+[dependencies]
+observa-config = { path = "../observa-config" }
+observa-server = { path = "../observa-server" }
+observa-db = { path = "../observa-db" }
+observa-cache = { path = "../observa-cache" }
+observa-bus = { path = "../observa-bus" }
+observa-collector = { path = "../observa-collector" }
+observa-ingestor = { path = "../observa-ingestor" }
+observa-shared = { path = "../observa-shared" }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
