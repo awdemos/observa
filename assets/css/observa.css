@@ -236,6 +236,18 @@ a:hover {
   animation: pulse 2s ease-in-out infinite;
 }
 
+.status-pill.ok {
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  color: var(--ok);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 20%, transparent);
+}
+
+.status-pill.warn {
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--warn);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 20%, transparent);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }

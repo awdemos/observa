@@ -33,6 +33,7 @@ use crate::routes::view::{
     ProcessCard, ProcessEventRow, SecurityAlertRow, StorageEventRow, SwapCard,
 };
 use crate::state::AppState;
+use crate::tpe;
 
 pub mod params;
 pub mod view;
@@ -692,6 +693,7 @@ async fn build_security_context_with_limit(
     ctx.insert("alerts", &alerts);
     ctx.insert("alert_count", &alerts.len());
     ctx.insert("severity_summary", &summary);
+    ctx.insert("tpe_status", &tpe::detect_tpe());
     ctx
 }
 

@@ -11,6 +11,7 @@ pub mod rate_limit;
 pub mod routes;
 pub mod state;
 pub mod store;
+pub mod tpe;
 
 pub use routes::router;
 pub use state::{AppState, SharedState};

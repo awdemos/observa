@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,6 +45,13 @@ async fn main() {
         warn!(
             "OBSERVA_DASHBOARD_TOKEN is not set; the dashboard and API are open to anyone with network access"
         );
+    }
+
+    // Apply a Landlock sandbox that restricts execution to trusted system
+    // directories plus the configured data directories.
+    let data_dirs = data_dirs_from_config(&config);
+    if let Err(err) = observa_server::tpe::enforce_tpe(&[], &data_dirs) {
+        warn!(%err, "failed to enforce trusted path execution sandbox");
     }
 
     let db = match config.database_url.as_ref() {
@@ -123,4 +131,18 @@ async fn main() {
     }
 
     info!("Observa stopped");
+}
+
+fn data_dirs_from_config(config: &observa_config::Config) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(url) = config.database_url.as_ref() {
+        if let Some(path) = url.strip_prefix("sqlite://") {
+            if path != ":memory:" {
+                if let Some(parent) = PathBuf::from(path).parent() {
+                    dirs.push(parent.to_path_buf());
+                }
+            }
+        }
+    }
+    dirs
 }

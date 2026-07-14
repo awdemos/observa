@@ -14,6 +14,21 @@
 
   <div id="verify-chain-result" class="verify-result" aria-live="polite" hidden></div>
 
+  <section class="panel panel-compact tpe-status-panel" aria-label="Trusted path execution">
+    <div class="section-header">
+      <h3>🔒 Trusted path execution</h3>
+      <span class="status-pill {% if tpe_status.enabled %}ok{% else %}warn{% endif %}">
+        {% if tpe_status.enabled %}enabled{% else %}disabled{% endif %}
+      </span>
+    </div>
+    <p>{{ tpe_status.recommendation }}</p>
+    {% if tpe_status.mechanisms %}
+    <p class="detail">Active mechanisms:
+      {% for m in tpe_status.mechanisms %}{{ m }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+  </section>
+
   <form id="security-filter" class="log-filter security-filter"
         hx-get="/partials/security"
         hx-target="#security-rows"

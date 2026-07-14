@@ -9,7 +9,7 @@ use axum::{
     Json, Router,
 };
 use observa_shared::{ChatMessage, HealthStatus, InsightSnapshot, LogEvent, Role};
-use crate::{chat, llm, state::AppState};
+use crate::{chat, llm, state::AppState, tpe};
 use crate::auth::OWNER_TOKEN_HEADER;
 use crate::llm_sanitize::{clamp_prompt, format_log_for_explanation, validate_message_length};
 use crate::rate_limit::{rate_limit_check, ClientIp, RateLimitConfig, API_READ_RATE_LIMIT};
@@ -41,6 +41,7 @@ pub fn api_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/chat/ask", post(chat::ask))
         .route("/chat/ask-html", post(chat::ask_html))
         .route("/chat/stream", get(chat::stream))
+        .route("/security/tpe", get(tpe_status))
         .with_state(state)
 }
 
@@ -306,6 +307,10 @@ async fn verify_alert_chain(
         }).into_response(),
         Err(err) => store_error_response(err),
     }
+}
+
+async fn tpe_status(ClientIp(_addr): ClientIp) -> Response {
+    Json(tpe::detect_tpe()).into_response()
 }
 
 async fn export_alerts(
