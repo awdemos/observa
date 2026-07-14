@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Observa{% endblock title %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/css/observa.css?v=8">
+  <script src="/assets/vendor/three/three.min.js" defer></script>
+  <script src="/assets/vendor/three/OrbitControls.js" defer></script>
+  <script src="/assets/js/three-viz.js?v=6" defer></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+  {% block head %}{% endblock head %}
+</head>
+<body>
+  <header class="site-header">
+    <nav class="site-nav" aria-label="Primary">
+      <a class="brand" href="/">Observa</a>
+      <div class="nav-links" id="nav-menu">
+        <a href="/metrics"{% if request_path == "/metrics" %} aria-current="page"{% endif %}>Metrics</a>
+        <a href="/logs"{% if request_path == "/logs" %} aria-current="page"{% endif %}>Logs</a>
+        <a href="/security"{% if request_path == "/security" %} aria-current="page"{% endif %}>Security</a>
+        <a href="/network"{% if request_path == "/network" %} aria-current="page"{% endif %}>Network</a>
+        <a href="/processes"{% if request_path == "/processes" %} aria-current="page"{% endif %}>Processes</a>
+        <a href="/storage"{% if request_path == "/storage" %} aria-current="page"{% endif %}>Storage</a>
+        <a href="/ai-servers"{% if request_path == "/ai-servers" %} aria-current="page"{% endif %}>AI Servers</a>
+        <a href="/status"{% if request_path == "/status" %} aria-current="page"{% endif %}>Status</a>
+        <a href="/chat"{% if request_path == "/chat" %} aria-current="page"{% endif %}>Chat</a>
+        <a href="/about"{% if request_path == "/about" %} aria-current="page"{% endif %}>About</a>
+      </div>
+      <button type="button" class="nav-toggle mobile-only" id="nav-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="nav-menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      </button>
+      <div class="nav-actions">
+        <span class="status-pill" id="sse-status" data-state="live" aria-live="polite">live</span>
+        <button type="button" class="nav-action" id="preferences-toggle" aria-label="Preferences" aria-expanded="false" aria-controls="preferences-panel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.43 12.98c.04-.32.07-.66.07-1.02s-.03-.7-.07-1.02l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.03 7.03 0 0 0-1.73-1.01l-.38-2.65A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.49.42l-.38 2.65a7.03 7.03 0 0 0-1.73 1.01l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64L2.57 9.96C2.53 10.28 2.5 10.62 2.5 11s.03.72.07 1.02l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1.01c.48.39 1.01.73 1.59 1l.38 2.65a.5.5 0 0 0 .49.42h4a.5.5 0 0 0 .49-.42l.38-2.65a7.03 7.03 0 0 0 1.59-1l2.49 1.01a.5.5 0 0 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65Z" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        </button>
+        <div class="preferences-panel" id="preferences-panel" hidden>
+          <div class="preferences-header">Preferences</div>
+          <label class="preference-row" for="pref-theme">
+            <span>Theme</span>
+            <select id="pref-theme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="auto">Auto</option>
+            </select>
+          </label>
+          <label class="preference-row" for="pref-refresh">
+            <span>Refresh</span>
+            <select id="pref-refresh">
+              <option value="1000">1s</option>
+              <option value="2000">2s</option>
+              <option value="5000">5s</option>
+              <option value="30000">30s</option>
+              <option value="0">Off</option>
+            </select>
+          </label>
+          <label class="preference-row" for="pref-reduced-motion">
+            <span>Reduced motion</span>
+            <input type="checkbox" id="pref-reduced-motion">
+          </label>
+          <label class="preference-row" for="pref-alert-sound">
+            <span>Alert sound</span>
+            <input type="checkbox" id="pref-alert-sound">
+          </label>
+          <form method="POST" action="/logout" class="preference-row">
+            <button type="submit" class="nav-action" aria-label="Sign out">Sign out</button>
+          </form>
+          <label class="preference-row" for="pref-auto-rotate">
+            <span>Auto-rotate scenes</span>
+            <input type="checkbox" id="pref-auto-rotate">
+          </label>
+          <label class="preference-row" for="pref-auto-rotate-speed">
+            <span>Rotation speed</span>
+            <select id="pref-auto-rotate-speed">
+              <option value="slow">Slow</option>
+              <option value="normal" selected>Normal</option>
+              <option value="fast">Fast</option>
+            </select>
+          </label>
+          <div class="preference-row preference-row-stack">
+            <div class="preference-label-line">
+              <span>Assistant system prompt</span>
+              <span class="char-count" id="system-prompt-count">0/4000</span>
+            </div>
+            <textarea id="pref-system-prompt" rows="6" maxlength="4000" placeholder="Custom instructions for the assistant…"></textarea>
+            <div class="system-prompt-presets">
+              <button type="button" data-preset="default" class="preset-btn">Default</button>
+              <button type="button" data-preset="detailed" class="preset-btn">Detailed</button>
+              <button type="button" data-preset="concise" class="preset-btn">Concise</button>
+              <button type="button" data-preset="pirate" class="preset-btn">Pirate</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </nav>
+  </header>
+  <main class="site-main">
+    {% block content %}{% endblock content %}
+  </main>
+
+  <aside class="chat-widget" id="chat-widget" aria-label="Assistant">
+    <button type="button" class="chat-widget-toggle" id="chat-widget-toggle" aria-label="Open assistant" aria-expanded="false" aria-controls="chat-widget-card">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
+    </button>
+    <div class="chat-widget-card" id="chat-widget-card" role="dialog" aria-modal="true" aria-labelledby="chat-widget-title" hidden>
+      <div class="chat-widget-header">
+        <div>
+          <div class="chat-widget-title" id="chat-widget-title">Observa Assistant</div>
+          <div class="chat-widget-subtitle">Ask about this system</div>
+        </div>
+        <button type="button" class="chat-widget-close" id="chat-widget-close" aria-label="Close assistant">×</button>
+      </div>
+      <div id="chat-widget-messages" class="chat-widget-messages">
+        <div class="empty-state">
+          <p>How can I help with this system?</p>
+        </div>
+      </div>
+      <form id="chat-widget-form" class="chat-widget-input-area">
+        <input type="hidden" name="session_id" value="">
+        <input type="hidden" name="owner_token" value="">
+        <input id="chat-widget-input" type="text" name="message" placeholder="Ask Observa…" aria-label="Message" required autocomplete="off">
+        <button type="submit" aria-label="Send">→</button>
+        <span id="chat-widget-spinner" class="spinner" aria-hidden="true">●</span>
+      </form>
+    </div>
+  </aside>
+
+  <footer class="site-footer">
+    <span>© 2026 VibeCodingAgency.com</span>
+    <a href="/about">About</a>
+    <a href="https://github.com/awdemos/observa" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+
+  <div id="toast-container" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="/assets/js/observa.js?v=10" defer></script>
+</body>
+</html>

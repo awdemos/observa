@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}AI Servers | Observa{% endblock title %}
+
+{% block content %}
+{% if servers %}
+<section class="kpi-strip" id="ai-servers-kpi-strip" aria-label="AI server summary">
+  <div class="metric-tile accent" data-metric="ai-servers">
+    <div class="metric-label">AI Servers</div>
+    <div class="metric-value" id="ai-server-count-value">{{ server_count }}</div>
+    <div class="metric-detail">Hosted models detected</div>
+  </div>
+  <div class="metric-tile" data-metric="ai-cpu">
+    <div class="metric-label">Combined CPU</div>
+    <div class="metric-value" id="ai-server-cpu-value">{{ servers | map(attribute="cpu_pct_num") | sum | round(method="floor", precision=1) }}%</div>
+    <div class="metric-detail">Across all inference engines</div>
+  </div>
+  <div class="metric-tile" data-metric="ai-mem">
+    <div class="metric-label">Combined Memory</div>
+    <div class="metric-value" id="ai-server-mem-value">{{ servers | map(attribute="memory_bytes") | sum }}</div>
+    <div class="metric-detail">Total resident memory</div>
+  </div>
+</section>
+
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Inference Engine Constellation</h2>
+    <span class="section-meta">vLLM, Ollama, Triton, OpenAI, and more</span>
+  </div>
+  <div class="three-viz" data-three-viz="aiServers" id="ai-servers-viz"
+       data-server-count="{{ server_count }}"
+       data-servers="{{ servers | json_encode() | safe }}">
+  </div>
+</section>
+
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Server Cards</h2>
+    <span class="section-meta">{{ server_count }} detected</span>
+  </div>
+  <div id="ai-server-cards">
+    {% include "partials/ai_server_cards.html" %}
+  </div>
+
+  <details class="verify-details">
+    <summary>Raw data — AI servers</summary>
+    <div class="verify-body">
+      <div class="verify-table-wrapper">
+        <table class="verify-table">
+          <thead>
+            <tr><th>Kind</th><th>Name</th><th>PID</th><th>CPU %</th><th>Memory</th><th>Endpoint</th></tr>
+          </thead>
+          <tbody>
+            {% for s in servers %}
+            <tr>
+              <td>{{ s.kind }}</td>
+              <td>{{ s.name }}</td>
+              <td class="mono">{{ s.pid }}</td>
+              <td class="mono">{{ s.cpu_pct }}</td>
+              <td class="mono">{{ s.memory }}</td>
+              <td class="mono">{{ s.endpoint | default(value="—") }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+</section>
+{% else %}
+<section class="panel empty-state">
+  <h2>No AI model servers detected</h2>
+  <p>Observa scans for vLLM, Ollama, Triton, OpenAI-compatible, SGLang, Llama.cpp, ExLlamaV2, KoboldCpp, TabbyAPI, LM Studio, TGI, and generic Python inference processes.</p>
+</section>
+{% endif %}
+{% endblock content %}

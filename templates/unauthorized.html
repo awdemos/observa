@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Unauthorized | Observa{% endblock title %}
+
+{% block content %}
+<section class="panel">
+  <div class="section-header">
+    <h2>🔒 Unauthorized</h2>
+  </div>
+  <p>You need to sign in to view <code>{{ path }}</code>.</p>
+  <div class="unauthorized-actions">
+    <a href="/login" class="button">Sign in to Observa</a>
+  </div>
+  <p class="login-hint">Enter the token configured in <code>OBSERVA_DASHBOARD_TOKEN</code>.</p>
+</section>
+{% endblock content %}

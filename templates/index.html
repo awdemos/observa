@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Observa Dashboard{% endblock title %}
+
+{% block content %}
+{% if summary %}
+<section class="kpi-strip" id="kpi-strip" aria-label="System KPIs">
+  <div class="metric-tile accent" data-metric="cpu">
+    <div class="metric-label">CPU</div>
+    <div class="metric-value" id="hero-cpu-value">{{ summary.cpu_pct }}</div>
+    <div class="metric-detail" id="hero-cpu-detail">{{ summary.core_count }} cores @ {{ summary.frequency }}</div>
+  </div>
+  <div class="metric-tile" data-metric="memory">
+    <div class="metric-label">Memory</div>
+    <div class="metric-value" id="hero-memory-value">{{ summary.memory_total }}</div>
+    <div class="metric-detail" id="hero-memory-detail"><span id="hero-memory-pct">{{ summary.memory_pct }}</span> — {{ summary.memory_used }} used</div>
+  </div>
+  <div class="metric-tile" data-metric="disk">
+    <div class="metric-label">Disk</div>
+    <div class="metric-value" id="hero-disk-value">{{ summary.disk_count }}</div>
+    <div class="metric-detail" id="hero-disk-detail">Active block devices</div>
+  </div>
+  <div class="metric-tile accent" data-metric="network-rx">
+    <div class="metric-label">Network RX</div>
+    <div class="metric-value" id="hero-network-rx-value">{{ summary.rx_rate }}</div>
+    <div class="metric-detail" id="hero-network-rx-detail">Total {{ summary.rx_total }}</div>
+  </div>
+  <div class="metric-tile" data-metric="network-tx">
+    <div class="metric-label">Network TX</div>
+    <div class="metric-value" id="hero-network-tx-value">{{ summary.tx_rate }}</div>
+    <div class="metric-detail" id="hero-network-tx-detail">Total {{ summary.tx_total }}</div>
+  </div>
+  <div class="metric-tile" data-metric="processes">
+    <div class="metric-label">Processes</div>
+    <div class="metric-value" id="hero-processes-value">{{ summary.process_count }}</div>
+    <div class="metric-detail">Top consumers tracked</div>
+  </div>
+  <div class="metric-tile accent" data-metric="gpu">
+    <div class="metric-label">GPU</div>
+    <div class="metric-value" id="hero-gpu-memory-value">{{ summary.gpu_count }} GPU{% if summary.gpu_count != 1 %}s{% endif %}</div>
+    <div class="metric-detail" id="hero-gpu-memory-detail">{{ summary.gpu_used }} / {{ summary.gpu_total }}</div>
+  </div>
+</section>
+
+<div class="dashboard-grid">
+  <div class="dashboard-main">
+    <section class="panel trend-panel">
+      <div class="section-header">
+        <h2>CPU &amp; Memory Trend</h2>
+        <a href="/metrics">View metrics →</a>
+      </div>
+      <div class="chart-legend" id="chart-legend" aria-label="Chart legend">
+        <span class="legend-item cpu"><span class="legend-dot"></span>CPU <strong id="legend-cpu">--%</strong></span>
+        <span class="legend-item memory"><span class="legend-dot"></span>Memory <strong id="legend-memory">--%</strong></span>
+      </div>
+      <div class="canvas-wrap chart-wrap">
+        <canvas id="metrics-chart" hidden></canvas>
+        <div class="three-viz" data-three-viz="ribbon" id="metrics-ribbon" aria-label="CPU and Memory Trend ribbon"></div>
+      </div>
+    </section>
+
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>Top Processes</h2>
+        <a href="/processes">View all →</a>
+      </div>
+      <div id="dashboard-process-cards">
+        {% include "partials/process_cards.html" %}
+      </div>
+    </section>
+
+    <div class="dashboard-preview-row">
+      <section class="panel panel-compact dashboard-preview-panel">
+        <div class="section-header">
+          <h2>Network</h2>
+          <a href="/network">View all →</a>
+        </div>
+        <div id="dashboard-network-cards">
+          {% include "partials/network_cards.html" %}
+        </div>
+      </section>
+
+      <section class="panel panel-compact dashboard-preview-panel">
+        <div class="section-header">
+          <h2>Storage</h2>
+          <a href="/storage">View all →</a>
+        </div>
+        <div id="dashboard-storage-cards">
+          {% include "partials/storage_cards.html" %}
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="dashboard-side">
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>System Status</h2>
+        <span class="status-dot" id="system-status-dot" aria-hidden="true"></span>
+      </div>
+      <div id="system-status-panel" class="system-status">
+        <p class="status-item">
+          <span class="status-label">Health</span>
+          <span class="status-value" id="health-status-value">Checking…</span>
+        </p>
+        <p class="status-item">
+          <span class="status-label">Retention</span>
+          <span class="status-value" id="retention-status-value">{{ retention_days }} days</span>
+        </p>
+        <p class="status-item">
+          <span class="status-label">Stored</span>
+          <span class="status-value" id="stored-counts-value">{{ metric_count }} metrics · {{ log_count }} logs</span>
+        </p>
+        <p class="status-item">
+          <span class="status-label">Compression</span>
+          <span class="status-value" id="compression-status-value">{% if compression_enabled %}zstd{% else %}off{% endif %}</span>
+        </p>
+        <p class="status-item">
+          <span class="status-label">Chat heartbeat</span>
+          <span class="status-value" id="chat-heartbeat-value">Waiting…</span>
+        </p>
+        <p class="status-item">
+          <span class="status-label">Last alert</span>
+          <span class="status-value" id="last-alert-value">None</span>
+        </p>
+      </div>
+    </section>
+
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>System Insight</h2>
+      </div>
+      <div id="system-insight-panel" class="system-insight">
+        <p class="insight-empty">Insight digest will appear after the next 30-second background run.</p>
+      </div>
+    </section>
+
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>Security alerts <span class="count-pill" id="security-count">{{ alert_count }}</span></h2>
+        <a href="/security">View all →</a>
+      </div>
+      <div id="security-rows">
+        {% include "partials/security_rows.html" %}
+      </div>
+    </section>
+
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>Recent Logs</h2>
+        <a href="/logs">View all →</a>
+      </div>
+      <div id="logs-panel">
+        {% include "partials/log_rows.html" %}
+      </div>
+    </section>
+  </div>
+</div>
+{% else %}
+<section class="panel empty-state">
+  <h2>Observa is starting up</h2>
+  <p>No metrics available yet. Start the collector or wait for the next snapshot.</p>
+</section>
+{% endif %}
+{% endblock content %}

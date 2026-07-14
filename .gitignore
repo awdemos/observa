@@ -1,0 +1,11 @@
+/target
+*.sqlite
+*.sqlite3
+.env
+.DS_Store
+/.omo
+/.playwright-mcp
+/.worktrees
+/.superpowers
+
+/.desloppify

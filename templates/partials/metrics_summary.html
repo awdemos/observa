@@ -1,0 +1,29 @@
+<div class="metrics-summary" id="metrics-summary">
+  <div class="metric-card" data-metric="cpu">
+    <div class="label">CPU</div>
+    <div class="value" id="cpu-value">{{ summary.cpu_pct }}</div>
+    <div class="detail" id="cpu-detail">{{ summary.core_count }} cores @ {{ summary.frequency }}</div>
+  </div>
+  <div class="metric-card" data-metric="memory">
+    <div class="label">Memory</div>
+    <div class="value" id="memory-value">{{ summary.memory_total }}</div>
+    <div class="detail" id="memory-detail">
+      <span id="memory-pct">{{ summary.memory_pct }}</span> — {{ summary.memory_used }} used
+    </div>
+  </div>
+  <div class="metric-card" data-metric="disks">
+    <div class="label">Disks</div>
+    <div class="value" id="disks-value">{{ summary.disk_count }}</div>
+    <div class="detail">Active block devices</div>
+  </div>
+  <div class="metric-card" data-metric="networks">
+    <div class="label">Networks</div>
+    <div class="value" id="networks-value">{{ summary.network_count }}</div>
+    <div class="detail">Interfaces tracked</div>
+  </div>
+  <div class="metric-card" data-metric="processes">
+    <div class="label">Processes</div>
+    <div class="value" id="processes-value">{{ summary.process_count }}</div>
+    <div class="detail">Top consumers listed below</div>
+  </div>
+</div>

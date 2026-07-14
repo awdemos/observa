@@ -1,0 +1,51 @@
+<script type="application/json" id="network-data">
+[
+  {% for n in networks %}
+  {"name": "{{ n.name|json_escape }}", "rx_rate": {{ n.rx_rate_num }}, "tx_rate": {{ n.tx_rate_num }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+<script type="application/json" id="network-combined-data">
+{"rx_total": {{ network_combined.rx_total }}, "tx_total": {{ network_combined.tx_total }}, "rx_rate_total": {{ network_combined.rx_rate_total }}, "tx_rate_total": {{ network_combined.tx_rate_total }}}
+</script>
+{% if networks %}
+  <div class="network-combined-card">
+    <div class="network-combined-header">
+      <span class="network-combined-name">All Interfaces</span>
+      <span class="network-combined-totals">RX {{ network_combined.rx_total_str }} / TX {{ network_combined.tx_total_str }}</span>
+    </div>
+    <div class="network-combined-rates">
+      <span class="rate-row"><span class="rate-label">RX</span><span class="rate-value">{{ network_combined.rx_rate_str }}</span></span>
+      <span class="rate-row"><span class="rate-label">TX</span><span class="rate-value">{{ network_combined.tx_rate_str }}</span></span>
+    </div>
+  </div>
+  <div class="network-grid">
+    {% for n in networks %}
+      <div class="network-card">
+        <div class="network-header">
+          <span class="network-name">{{ n.name }}</span>
+          <span class="network-totals">RX {{ n.rx }} / TX {{ n.tx }}</span>
+        </div>
+        <div class="network-sparkline" aria-hidden="true">
+          {% for v in n.sparkline %}
+          <span class="spark-bar" style="height: {{ v }}%"></span>
+          {% endfor %}
+        </div>
+        <div class="network-rates">
+          <div class="rate-row">
+            <span class="rate-label">RX</span>
+            <div class="rate-bar"><div class="rate-fill rx" style="width: {{ n.rx_rate_bar }}%"></div></div>
+            <span class="rate-value">{{ n.rx_rate }}</span>
+          </div>
+          <div class="rate-row">
+            <span class="rate-label">TX</span>
+            <div class="rate-bar"><div class="rate-fill tx" style="width: {{ n.tx_rate_bar }}%"></div></div>
+            <span class="rate-value">{{ n.tx_rate }}</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty-state">No network interfaces detected yet.</p>
+{% endif %}

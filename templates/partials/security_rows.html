@@ -1,0 +1,61 @@
+<div id="security-summary" class="severity-summary">
+  {% for item in severity_summary %}
+  <span class="severity-badge severity-{{ item.class }}" data-severity="{{ item.severity }}">
+    {{ item.severity }} <strong>{{ item.count }}</strong>
+  </span>
+  {% endfor %}
+  {% if alert_count == 0 %}
+  <span class="severity-badge severity-info">No active alerts</span>
+  {% endif %}
+</div>
+
+<script type="application/json" id="security-data">
+[
+  {% for alert in alerts %}
+  {"severity": "{{ alert.severity_class }}", "source": "{{ alert.source|json_escape }}", "message": "{{ alert.message|json_escape }}"}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+
+<div id="security-table-wrap" class="log-table-container">
+{% if alerts %}
+  <table class="data-table security-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Severity</th>
+        <th>Source</th>
+        <th>Message</th>
+      </tr>
+    </thead>
+    <tbody id="security-body">
+      {% for alert in alerts %}
+      <tr class="log-row security-row">
+        <td class="ts">{{ alert.ts }}</td>
+        <td class="severity severity-{{ alert.severity_class }}">{{ alert.severity }}</td>
+        <td>{{ alert.source }}{% if alert.unit %} / {{ alert.unit }}{% endif %}</td>
+        <td class="message" title="{{ alert.message }}">
+          <span>{{ alert.message }}</span>
+          <button class="explain-log-btn"
+                  hx-post="/api/logs/explain"
+                  hx-ext="json-enc"
+                  hx-vals='{"log": {"ts": "{{ alert.ts }}", "source": "{{ alert.source|json_escape }}", "severity": "{{ alert.severity }}", "message": "{{ alert.message|json_escape }}"}}'
+                  hx-target="next .log-explanation"
+                  hx-swap="innerHTML"
+                  hx-indicator=".explain-spinner"
+                  type="button">
+            Explain
+          </button>
+          <span class="explain-spinner htmx-indicator" aria-hidden="true">●</span>
+          <div class="log-explanation"></div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="empty-state">
+    <p>No security alerts match the current filters.</p>
+  </div>
+{% endif %}
+</div>

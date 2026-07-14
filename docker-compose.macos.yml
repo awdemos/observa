@@ -1,0 +1,86 @@
+# Self-contained Docker Compose stack for macOS / Docker Desktop.
+#
+# Docker Desktop on macOS does not support host networking, the host /proc
+# filesystem, or NVIDIA CDI reservations, so this file runs Observa in a more
+# isolated container. Process, memory, and disk metrics will reflect the
+# container rather than the Mac host.
+#
+# Run with:
+#
+#   docker compose -f docker-compose.macos.yml up --build
+#
+# Then open http://localhost:3000.
+
+services:
+  observa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: observa:latest
+    container_name: observa
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      # REQUIRED: set a strong random token before running.
+      - OBSERVA_DASHBOARD_TOKEN=${OBSERVA_DASHBOARD_TOKEN:?Set OBSERVA_DASHBOARD_TOKEN to a strong random value}
+      - OBSERVA_BIND=0.0.0.0:3000
+      - OBSERVA_DATABASE_URL=sqlite:///data/observa.db
+      # Reach the llama-server sidecar by its Compose service name.
+      - OBSERVA_LLM_API_BASE=http://llama-server:8080/v1
+      - OBSERVA_LLM_MODEL=llama
+      - OBSERVA_LLM_API_KEY=unused
+      - OBSERVA_LLM_TIMEOUT_SECS=120
+      - OBSERVA_CHAT_TIMEOUT_SECS=120
+      - OBSERVA_SAMPLE_INTERVAL_MS=2000
+      - OBSERVA_LOG_SOURCE=file
+      - OBSERVA_LOG_FILE=/data/logs/system.log
+      - OBSERVA_NO_TAIL=false
+      - RUST_LOG=info
+    volumes:
+      - observa-data:/data
+    depends_on:
+      - llama-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "observa", "--version"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: observa-llama-server
+    ports:
+      - "127.0.0.1:18080:8080"
+    volumes:
+      - ./models:/models:ro
+    command:
+      - "--model"
+      - "/models/lowbit-2026/Qwen3-4B-Instruct-2507-Q2_K.gguf"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+      - "--ctx-size"
+      - "4096"
+      - "--n-gpu-layers"
+      - "0"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 24g
+
+volumes:
+  observa-data:

@@ -1,0 +1,68 @@
+<script type="application/json" id="log-data">
+  [
+    {% for log in logs %}
+    {"severity": "{{ log.severity|json_escape }}", "severity_class": "{{ log.severity_class }}", "source": "{{ log.source|json_escape }}", "message": "{{ log.message|json_escape }}"}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+</script>
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>Severity</th>
+      <th>Source</th>
+      <th>Message</th>
+    </tr>
+  </thead>
+  <tbody id="logs-body">
+    {% if logs %}
+    {% for log in logs %}
+    <tr class="log-row">
+      <td class="ts">{{ log.ts }}</td>
+      <td class="severity severity-{{ log.severity_class }}">{{ log.severity }}</td>
+      <td>{{ log.source }}{% if log.unit %} / {{ log.unit }}{% endif %}</td>
+      <td class="message" title="{{ log.message }}">
+        <span>{{ log.message }}</span>
+        <button class="explain-log-btn"
+                hx-post="/api/logs/explain"
+                hx-ext="json-enc"
+                hx-vals='{"log": {"ts": "{{ log.ts }}", "source": "{{ log.source|json_escape }}", "severity": "{{ log.severity }}", "message": "{{ log.message|json_escape }}"}}'
+                hx-target="next .log-explanation"
+                hx-swap="innerHTML"
+                hx-indicator=".explain-spinner"
+                type="button">
+          Explain
+        </button>
+        <span class="explain-spinner htmx-indicator" aria-hidden="true">●</span>
+        <div class="log-explanation"></div>
+      </td>
+    </tr>
+    {% endfor %}
+    {% else %}
+    <tr>
+      <td colspan="4" class="empty-state">No logs yet.</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+{% set current_page = page | default(value=0) %}
+{% set pages_total = total_pages | default(value=1) %}
+{% set logs_total = total | default(value=logs | length) %}
+{% if pages_total > 1 %}
+{% set prev_page = current_page - 1 %}
+{% set next_page = current_page + 1 %}
+<nav class="pagination" aria-label="Log pages">
+  <span class="pagination-meta">Page {{ current_page + 1 }} of {{ pages_total }} ({{ logs_total }} logs)</span>
+  <div class="pagination-links">
+    <button type="button" class="btn btn-sm" {% if current_page == 0 %}disabled{% endif %}
+            hx-get="/partials/logs?{% if filter_q %}q={{ filter_q|urlencode }}&amp;{% endif %}{% for s in filter_severities %}severity={{ s|urlencode }}&amp;{% endfor %}{% if current_page > 1 %}page={{ prev_page }}{% endif %}"
+            hx-target="#logs-table" hx-swap="innerHTML"
+            aria-label="Previous page">← Prev</button>
+    <button type="button" class="btn btn-sm" {% if next_page >= pages_total %}disabled{% endif %}
+            hx-get="/partials/logs?{% if filter_q %}q={{ filter_q|urlencode }}&amp;{% endif %}{% for s in filter_severities %}severity={{ s|urlencode }}&amp;{% endfor %}page={{ next_page }}"
+            hx-target="#logs-table" hx-swap="innerHTML"
+            aria-label="Next page">Next →</button>
+  </div>
+</nav>
+{% endif %}

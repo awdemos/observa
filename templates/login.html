@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Login | Observa{% endblock title %}
+
+{% block content %}
+<section class="panel">
+  <div class="section-header">
+    <h2>Sign in to Observa</h2>
+  </div>
+  {% if error %}
+  <div class="toast toast-error" role="alert">{{ error }}</div>
+  {% endif %}
+  <form method="POST" action="/login" class="login-form">
+    <label for="token">Access token</label>
+    <input id="token" type="password" name="token" required autocomplete="off" autofocus>
+    <button type="submit">Sign in</button>
+  </form>
+  <p class="login-hint">Enter the token configured in <code>OBSERVA_DASHBOARD_TOKEN</code>.</p>
+</section>
+{% endblock content %}

@@ -1,0 +1,14 @@
+{% if messages %}
+{% for msg in messages %}
+<div class="chat-message {{ msg.role }}">
+  <div class="bubble">
+    <div class="role">{{ msg.role }}</div>
+    <div class="content">{{ msg.content }}</div>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+  <p>No messages yet. Ask a question to start the session.</p>
+</div>
+{% endif %}

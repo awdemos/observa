@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Metrics | Observa{% endblock title %}
+
+{% block content %}
+{% if summary %}
+<section class="kpi-strip" id="metrics-kpi-strip" aria-label="Metrics summary">
+  <div class="metric-tile accent" data-metric="cpu">
+    <div class="metric-label">CPU</div>
+    <div class="metric-value" id="metrics-cpu-value">{{ summary.cpu_pct }}</div>
+    <div class="metric-detail">{{ summary.core_count }} cores @ {{ summary.frequency }}</div>
+  </div>
+  <div class="metric-tile" data-metric="memory">
+    <div class="metric-label">Memory</div>
+    <div class="metric-value" id="metrics-memory-value">{{ summary.memory_total }}</div>
+    <div class="metric-detail">{{ summary.memory_pct }} — {{ summary.memory_used }} used</div>
+  </div>
+  <div class="metric-tile" data-metric="disks">
+    <div class="metric-label">Disks</div>
+    <div class="metric-value" id="metrics-disks-value">{{ summary.disk_count }}</div>
+    <div class="metric-detail">Active block devices</div>
+  </div>
+  <div class="metric-tile" data-metric="networks">
+    <div class="metric-label">Networks</div>
+    <div class="metric-value" id="metrics-networks-value">{{ summary.network_count }}</div>
+    <div class="metric-detail">Interfaces tracked</div>
+  </div>
+  <div class="metric-tile" data-metric="processes">
+    <div class="metric-label">Processes</div>
+    <div class="metric-value" id="metrics-processes-value">{{ summary.process_count }}</div>
+    <div class="metric-detail">Top consumers</div>
+  </div>
+</section>
+
+<div class="dashboard-grid">
+  <div class="dashboard-main">
+    <section class="panel trend-panel">
+      <div class="section-header">
+        <h2>CPU &amp; Memory Trend</h2>
+        <form id="metric-range-form" class="metric-range-form" hx-get="/metrics" hx-target="main" hx-swap="innerHTML" hx-push-url="true"
+              hx-trigger="change from:#metric-range">
+          <label for="metric-range">Range</label>
+          <select id="metric-range" name="range" aria-label="Time range">
+            <option value="15m" {% if range_minutes == 15 %}selected{% endif %}>Last 15 min</option>
+            <option value="1h" {% if range_minutes == 60 %}selected{% endif %}>Last hour</option>
+            <option value="6h" {% if range_minutes == 360 %}selected{% endif %}>Last 6 hours</option>
+            <option value="24h" {% if range_minutes == 1440 %}selected{% endif %}>Last 24 hours</option>
+            <option value="7d" {% if range_minutes == 10080 %}selected{% endif %}>Last 7 days</option>
+          </select>
+        </form>
+      </div>
+      <div class="chart-legend" id="chart-legend" aria-label="Chart legend">
+        <span class="legend-item cpu"><span class="legend-dot"></span>CPU <strong id="legend-cpu">--%</strong></span>
+        <span class="legend-item memory"><span class="legend-dot"></span>Memory <strong id="legend-memory">--%</strong></span>
+      </div>
+      <div class="canvas-wrap chart-wrap">
+        <canvas id="metrics-chart" data-range-minutes="{{ metric_history_minutes }}" hidden></canvas>
+        <div class="three-viz" data-three-viz="ribbon" id="metrics-ribbon" aria-label="CPU and Memory Trend ribbon"></div>
+      </div>
+
+      <details class="verify-details">
+        <summary>Verify this chart — raw metric history</summary>
+        <div class="verify-body">
+          <p>
+            The chart above is rendered from the metric snapshots below. Each row is one
+            sample collected by the collector.
+          </p>
+          <a class="btn btn-primary" href="data:application/json;base64,{{ metric_history_json_b64 }}" download="metric-history.json">
+            Download raw metrics JSON
+          </a>
+          {% include "partials/metrics_raw_table.html" %}
+        </div>
+      </details>
+    </section>
+
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>CPU Cores</h2>
+      </div>
+      <div id="cores-grid" class="core-grid compact">
+        {% for core in summary.core_bars %}
+        <div class="core-card">
+          <div class="core-label">Core {{ core.number }}</div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: {{ core.pct }}%"></div>
+          </div>
+          <div class="core-pct">{{ core.pct | round(method="floor", precision=1) }}%</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <div class="dashboard-side">
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>Disks</h2>
+        <a href="/storage">View storage →</a>
+      </div>
+      <div id="disks-grid" class="metric-list">
+        {% for disk in summary.disks %}
+        <div class="metric-list-item">
+          <div class="metric-list-main">
+            <span class="metric-list-name">{{ disk.name }}</span>
+            <span class="metric-list-value">{{ disk.pct | round(method="floor", precision=0) }}%</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: {{ disk.pct }}%"></div>
+          </div>
+          <div class="metric-list-detail">{{ disk.used }} / {{ disk.total }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel panel-compact">
+      <div class="section-header">
+        <h2>Networks</h2>
+        <a href="/network">View network →</a>
+      </div>
+      <div id="networks-grid" class="metric-list">
+        {% for net in summary.networks %}
+        <div class="metric-list-item">
+          <div class="metric-list-main">
+            <span class="metric-list-name">{{ net.name }}</span>
+            <span class="metric-list-value">RX {{ net.rx_rate }} · TX {{ net.tx_rate }}</span>
+          </div>
+          <div class="metric-list-detail">Total RX {{ net.rx }} · TX {{ net.tx }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Top Processes</h2>
+    <a href="/processes">View all →</a>
+  </div>
+  <div id="processes-table" class="table-wrap">
+    {% include "partials/metrics_table.html" %}
+  </div>
+</section>
+
+{% else %}
+<section class="panel empty-state">
+  <h2>No metrics yet</h2>
+  <p>Start the collector or wait for the next snapshot.</p>
+</section>
+{% endif %}
+{% endblock content %}

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Processes | Observa{% endblock title %}
+
+{% block content %}
+{% if processes %}
+<section class="kpi-strip" id="processes-kpi-strip" aria-label="Process summary">
+  <div class="metric-tile accent" data-metric="processes">
+    <div class="metric-label">Processes</div>
+    <div class="metric-value" id="processes-count-value">{{ process_count }}</div>
+    <div class="metric-detail">Top consumers tracked</div>
+  </div>
+  <div class="metric-tile" data-metric="cpu">
+    <div class="metric-label">Highest CPU</div>
+    <div class="metric-value" id="processes-top-cpu-value">{{ processes[0].cpu_pct }}</div>
+    <div class="metric-detail">{{ processes[0].name }}</div>
+  </div>
+  <div class="metric-tile" data-metric="memory">
+    <div class="metric-label">Largest Memory</div>
+    <div class="metric-value" id="processes-top-mem-value">{{ processes[0].memory }}</div>
+    <div class="metric-detail">{{ processes[0].name }}</div>
+  </div>
+</section>
+
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Process Cards</h2>
+    <span class="section-meta">CPU &amp; memory per process</span>
+  </div>
+  <div id="process-cards">
+    {% include "partials/process_cards.html" %}
+  </div>
+
+  <details class="verify-details">
+    <summary>Raw data — processes</summary>
+    <div class="verify-body">
+      <div class="verify-table-wrapper">
+        <table class="verify-table">
+          <thead>
+            <tr><th>PID</th><th>Name</th><th>CPU %</th><th>Memory</th></tr>
+          </thead>
+          <tbody>
+            {% for p in processes %}
+            <tr>
+              <td class="mono">{{ p.pid }}</td>
+              <td>{{ p.name }}</td>
+              <td class="mono">{{ p.cpu_pct }}</td>
+              <td class="mono">{{ p.memory }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="panel panel-compact">
+  <div class="section-header">
+    <h2>Recent Process Events</h2>
+    <span class="section-meta">{{ process_event_count }} recent logs</span>
+  </div>
+  <div id="process-events-table" class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Source</th>
+          <th>Severity</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in process_events %}
+        <tr class="log-row">
+          <td class="ts">{{ e.ts }}</td>
+          <td class="source">{{ e.source }}</td>
+          <td class="severity severity-{{ e.severity_class }}">{{ e.severity }}</td>
+          <td class="message">{{ e.message }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="panel empty-state">
+  <h2>No process data yet</h2>
+  <p>Start the collector or wait for the next snapshot.</p>
+</section>
+{% endif %}
+{% endblock content %}

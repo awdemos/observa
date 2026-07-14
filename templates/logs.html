@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Logs | Observa{% endblock title %}
+
+{% block content %}
+<section class="panel panel-compact" id="logs-panel">
+  <div class="section-header">
+    <h2>Logs</h2>
+    <span id="logs-spinner" class="htmx-indicator" aria-hidden="true">●</span>
+  </div>
+
+  <form id="log-filter" class="log-filter"
+        hx-get="/partials/logs"
+        hx-target="#logs-table"
+        hx-swap="innerHTML"
+        hx-trigger="submit, change from:.severity-filter"
+        hx-indicator="#logs-spinner">
+    <input type="search" name="q" value="{{ filter_q }}" placeholder="Search messages…" aria-label="Search logs">
+    <fieldset class="severity-filter" aria-label="Severity">
+      <label><input type="checkbox" name="severity" value="debug" {% if "debug" in filter_severities %}checked{% endif %}> debug</label>
+      <label><input type="checkbox" name="severity" value="info" {% if "info" in filter_severities %}checked{% endif %}> info</label>
+      <label><input type="checkbox" name="severity" value="warn" {% if "warn" in filter_severities %}checked{% endif %}> warn</label>
+      <label><input type="checkbox" name="severity" value="error" {% if "error" in filter_severities %}checked{% endif %}> error</label>
+      <label><input type="checkbox" name="severity" value="critical" {% if "critical" in filter_severities %}checked{% endif %}> critical</label>
+    </fieldset>
+    <button type="submit">Filter</button>
+  </form>
+
+  <div id="logs-table" class="log-table-container">
+    {% include "partials/log_rows.html" %}
+  </div>
+</section>
+{% endblock content %}

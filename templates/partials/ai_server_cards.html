@@ -1,0 +1,44 @@
+<script type="application/json" id="ai-server-data">
+[
+  {% for s in servers %}
+  {"kind": "{{ s.kind|json_escape }}", "name": "{{ s.name|json_escape }}", "pid": {{ s.pid }}, "cpu_pct": {{ s.cpu_pct_num }}, "memory_bytes": {{ s.memory_bytes }}, "port_hint": {% if s.port_hint %}{{ s.port_hint }}{% else %}null{% endif %}, "endpoint": {% if s.endpoint %}"{{ s.endpoint|json_escape }}"{% else %}null{% endif %}, "models": [{% for m in s.models %}"{{ m|json_escape }}"{% if not loop.last %},{% endif %}{% endfor %}]}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+{% if servers %}
+  <div class="ai-server-grid">
+    {% for s in servers %}
+      <div class="ai-server-card">
+        <div class="ai-server-header">
+          <div class="ai-server-kind">{{ s.kind }}</div>
+          <div class="ai-server-name">{{ s.name }}</div>
+        </div>
+        <div class="ai-server-meta">
+          <span class="ai-server-pid">PID {{ s.pid }}</span>
+          <span class="ai-server-memory">{{ s.memory }}</span>
+        </div>
+        <div class="ai-server-meter">
+          <span class="ai-server-meter-label">CPU</span>
+          <div class="ai-server-meter-bar">
+            <div class="ai-server-meter-fill" style="width: {{ s.cpu_pct_num }}%"></div>
+          </div>
+          <span class="ai-server-meter-value">{{ s.cpu_pct }}</span>
+        </div>
+        
+        {% if s.endpoint %}
+        <div class="ai-server-endpoint">
+          <a href="{{ s.endpoint }}" target="_blank" rel="noopener noreferrer">{{ s.endpoint }}</a>
+        </div>
+        {% endif %}
+        {% if s.models %}
+        <div class="ai-server-models">
+          <span class="ai-server-models-label">Models:</span>
+          <span class="ai-server-models-list">{% for m in s.models %}{{ m }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+        </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty-state">No AI model servers detected yet.</p>
+{% endif %}

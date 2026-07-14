@@ -1,0 +1,18 @@
+[package]
+name = "observa-db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+observa-shared = { path = "../observa-shared" }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "macros", "migrate", "chrono"] }
+rand = "0.8"
+uuid = { version = "1", features = ["serde", "v4"] }
+zstd = "0.13.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

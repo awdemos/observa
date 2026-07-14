@@ -1,0 +1,46 @@
+<script type="application/json" id="process-data">
+[
+  {% for p in processes %}
+  {"name": "{{ p.name|json_escape }}", "pid": {{ p.pid }}, "cpu_pct": {{ p.cpu_pct_num }}, "memory_bytes": {{ p.memory_bytes }}}{% if not loop.last %},{% endif %}
+  {% endfor %}
+]
+</script>
+{% if processes %}
+  <div class="process-grid">
+    {% for p in processes %}
+      <div class="process-card">
+        <div class="process-header">
+          <div class="process-info">
+            <span class="process-name">{{ p.name }}</span>
+            <span class="process-pid">PID {{ p.pid }}</span>
+          </div>
+          <span class="process-memory">{{ p.memory }}</span>
+        </div>
+        <div class="process-sparkline" aria-hidden="true">
+          {% for v in p.sparkline %}
+          <span class="spark-bar" style="height: {{ v }}%"></span>
+          {% endfor %}
+          <div class="three-viz" data-three-viz="process" data-name="{{ p.name|json_escape }}" data-pid="{{ p.pid }}" data-cpu-pct="{{ p.cpu_pct_num }}" data-sparkline="{{ p.sparkline|json_encode()|safe }}"></div>
+        </div>
+        <div class="process-meters">
+          <div class="process-meter">
+            <span class="process-meter-label">CPU</span>
+            <div class="process-meter-bar">
+              <div class="process-meter-fill cpu" style="width: {{ p.cpu_bar }}%"></div>
+            </div>
+            <span class="process-meter-value">{{ p.cpu_pct }}</span>
+          </div>
+          <div class="process-meter">
+            <span class="process-meter-label">Mem</span>
+            <div class="process-meter-bar">
+              <div class="process-meter-fill mem" style="width: {{ p.memory_bar }}%"></div>
+            </div>
+            <span class="process-meter-value">{{ p.memory }}</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty-state">No process data available yet.</p>
+{% endif %}

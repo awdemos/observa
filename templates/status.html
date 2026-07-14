@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}System Status | Observa{% endblock title %}
+
+{% block content %}
+<section class="hero">
+  <h1>System Status</h1>
+  <p>Health, heartbeat, retention, and stored data overview.</p>
+</section>
+
+<div class="panel status-panel">
+  <div class="section-header">
+    <h2>Observa Health</h2>
+    <span class="status-badge status-badge-{{ health|lower }}">{{ health }}</span>
+  </div>
+
+  <div class="system-status status-grid">
+    <div class="status-item">
+      <span class="status-label">Heartbeat</span>
+      <span class="status-value">#{{ heartbeat_seq }}</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">LLM configured</span>
+      <span class="status-value">{% if llm_ok %}Yes{% else %}No{% endif %}</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Version</span>
+      <span class="status-value">{{ version }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="section-header">
+    <h2>Data Provenance</h2>
+  </div>
+  <div class="provenance-grid">
+    <div class="status-item">
+      <span class="status-label">Sample interval</span>
+      <span class="status-value">{{ sample_interval_ms }} ms</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Log source</span>
+      <span class="status-value">{{ log_source }}</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">SQLite persistence</span>
+      <span class="status-value">{% if database_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Redis cache</span>
+      <span class="status-value">{% if redis_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Retention</span>
+      <span class="status-value">{{ retention_days }} days</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Compression</span>
+      <span class="status-value">{% if compression_enabled %}Enabled{% else %}Disabled{% endif %}</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Stored metrics</span>
+      <span class="status-value">{{ stored_metrics }}</span>
+    </div>
+    <div class="status-item">
+      <span class="status-label">Stored logs</span>
+      <span class="status-value">{{ stored_logs }}</span>
+    </div>
+    <div class="status-item provenance-wide">
+      <span class="status-label">Last snapshot</span>
+      <span class="status-value mono">{{ last_snapshot_at | default(value="—") }}</span>
+    </div>
+  </div>
+</div>
+
+{% if insight %}
+<div class="panel">
+  <div class="section-header">
+    <h2>Latest Insight</h2>
+    <span class="section-meta">{{ insight.ts }}</span>
+  </div>
+  <p class="insight-text insight-{{ insight.health|lower }}">{{ insight.summary }}</p>
+</div>
+{% endif %}
+{% endblock content %}
