@@ -23,6 +23,8 @@ const STAGGER_OFFSETS: [Duration; 6] = [
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(5);
 const WEBHOOK_TIMEOUT: Duration = Duration::from_secs(10);
 const NOTIFICATION_SEVERITY_THRESHOLD: Severity = Severity::Error;
+const CPU_CRITICAL_THRESHOLD: f32 = 99.0;
+const CPU_CRITICAL_DURATION: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// Spawn all background loops and return their handles.
 pub fn spawn_background_tasks(
@@ -315,6 +317,33 @@ fn spawn_insight_digest(state: SharedState, shutdown: watch::Receiver<bool>) -> 
             let metrics = state.store.recent_metrics(10).await.unwrap_or_default();
             let logs = state.store.recent_logs(20).await.unwrap_or_default();
 
+            let (cpu, memory_pct) = metrics.last().map(|m| {
+                let pct = if m.memory.total_bytes == 0 {
+                    0.0
+                } else {
+                    100.0 * m.memory.used_bytes as f64 / m.memory.total_bytes as f64
+                };
+                (m.cpu.usage_percent, pct)
+            }).unwrap_or((0.0, 0.0));
+
+            // Track how long CPU has stayed at or above 99%.
+            let mut pressure_since = state.background.cpu_pressure_since().await;
+            if cpu >= CPU_CRITICAL_THRESHOLD {
+                if pressure_since.is_none() {
+                    pressure_since = Some(Utc::now());
+                    state.background.set_cpu_pressure_since(pressure_since).await;
+                }
+            } else {
+                if pressure_since.is_some() {
+                    state.background.set_cpu_pressure_since(None).await;
+                    pressure_since = None;
+                }
+            }
+            let sustained_critical = pressure_since
+                .map(|since| Utc::now().signed_duration_since(since).num_seconds() as u64)
+                .map(|secs| secs >= CPU_CRITICAL_DURATION.as_secs())
+                .unwrap_or(false);
+
             let summary = match state.llm_mode {
                 crate::state::LlmMode::Fallback => insight::generate_local(&metrics, &logs),
                 crate::state::LlmMode::Remote => match insight::generate(&state, &metrics, &logs).await {
@@ -326,21 +355,23 @@ fn spawn_insight_digest(state: SharedState, shutdown: watch::Receiver<bool>) -> 
                 },
             };
 
-            let health = insight::classify_health(&summary);
+            // Derive health from actual data, not from the wording of the summary,
+            // so phrases like "no critical issues" don't accidentally mark the system unhealthy.
+            let health = health_from_data(&logs, cpu, memory_pct, sustained_critical);
             let insight = InsightSnapshot {
                 ts: Utc::now(),
                 summary,
                 health,
             };
             state.background.set_insight(insight.clone()).await;
-            info!(summary = %insight.summary, "generated system insight");
+            info!(summary = %insight.summary, health = ?insight.health, "generated system insight");
 
             if health != HealthStatus::Healthy {
-                let severity = if health == HealthStatus::Unhealthy {
-                    Severity::Critical
-                } else {
-                    Severity::Warn
-                };
+                let severity = alert_severity_from_data(&logs, cpu, memory_pct, sustained_critical);
+                if severity == Severity::Info {
+                    // No actionable issue; don't raise a security alert.
+                    continue;
+                }
                 let alert_event = LogEvent {
                     ts: insight.ts,
                     source: "observa-insight".to_string(),
@@ -379,3 +410,91 @@ fn spawn_insight_digest(state: SharedState, shutdown: watch::Receiver<bool>) -> 
 }
 
 
+
+pub fn health_from_data(
+    logs: &[LogEvent],
+    cpu: f32,
+    memory_pct: f64,
+    sustained_critical_cpu: bool,
+) -> HealthStatus {
+    let has_error = logs.iter().any(|l| l.severity == Severity::Error);
+    let has_critical_log = logs.iter().any(|l| l.severity == Severity::Critical);
+
+    if sustained_critical_cpu {
+        HealthStatus::Unhealthy
+    } else if has_critical_log || has_error || cpu >= 90.0 || memory_pct >= 90.0 {
+        HealthStatus::Degraded
+    } else {
+        HealthStatus::Healthy
+    }
+}
+
+pub fn alert_severity_from_data(
+    logs: &[LogEvent],
+    cpu: f32,
+    memory_pct: f64,
+    sustained_critical_cpu: bool,
+) -> Severity {
+    let has_critical_log = logs.iter().any(|l| l.severity == Severity::Critical);
+    let has_error = logs.iter().any(|l| l.severity == Severity::Error);
+    let has_warn = logs.iter().any(|l| l.severity == Severity::Warn);
+
+    if sustained_critical_cpu {
+        Severity::Critical
+    } else if has_critical_log || has_error || cpu >= 90.0 || memory_pct >= 90.0 {
+        Severity::Error
+    } else if has_warn || cpu >= 70.0 || memory_pct >= 70.0 {
+        Severity::Warn
+    } else {
+        Severity::Info
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn log(severity: Severity) -> LogEvent {
+        LogEvent {
+            ts: Utc::now(),
+            source: "test".to_string(),
+            unit: None,
+            severity,
+            message: "test".to_string(),
+            raw: None,
+            security: false,
+        }
+    }
+
+    #[test]
+    fn healthy_when_quiet_and_low_usage() {
+        let logs = vec![log(Severity::Info)];
+        assert_eq!(health_from_data(&logs, 10.0, 40.0, false), HealthStatus::Healthy);
+        assert_eq!(alert_severity_from_data(&logs, 10.0, 40.0, false), Severity::Info);
+    }
+
+    #[test]
+    fn degraded_on_error_log_or_high_cpu() {
+        let logs = vec![log(Severity::Error)];
+        assert_eq!(health_from_data(&logs, 10.0, 40.0, false), HealthStatus::Degraded);
+        assert_eq!(alert_severity_from_data(&logs, 10.0, 40.0, false), Severity::Error);
+
+        let logs = vec![log(Severity::Info)];
+        assert_eq!(health_from_data(&logs, 95.0, 50.0, false), HealthStatus::Degraded);
+        assert_eq!(alert_severity_from_data(&logs, 95.0, 50.0, false), Severity::Error);
+    }
+
+    #[test]
+    fn only_sustained_99_cpu_is_critical() {
+        let logs = vec![log(Severity::Info)];
+        // Below the 99% threshold should never be critical.
+        assert_eq!(alert_severity_from_data(&logs, 98.0, 50.0, false), Severity::Error);
+        // At or above 99% but not sustained is still only Error.
+        assert_eq!(alert_severity_from_data(&logs, 99.5, 50.0, false), Severity::Error);
+        assert_eq!(health_from_data(&logs, 99.5, 50.0, false), HealthStatus::Degraded);
+        // Only the sustained flag promotes to Critical/Unhealthy.
+        assert_eq!(alert_severity_from_data(&logs, 99.5, 50.0, true), Severity::Critical);
+        assert_eq!(health_from_data(&logs, 99.5, 50.0, true), HealthStatus::Unhealthy);
+    }
+}

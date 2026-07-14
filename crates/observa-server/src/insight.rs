@@ -9,10 +9,9 @@ const LLM_INSIGHT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Generate a terse system-health insight from recent metrics and logs.
 ///
-/// The returned string is already stripped of any visible reasoning chain and
-/// classified by [`classify_health`]. This is the only place that knows how to
-/// compose the LLM prompt for digest generation, so changes to the prompt or
-/// classification thresholds live here rather than in the background loop.
+/// The returned string is stored verbatim; health and alert severity are
+/// derived from real metrics and logs in the background digest loop so that
+/// LLM wording (e.g. "no critical issues") cannot skew classification.
 pub async fn generate(state: &AppState, metrics: &[MetricSnapshot], logs: &[LogEvent]) -> Result<String> {
     let (system_text, user_text) = build_insight_prompt(metrics, logs);
     let prompt = vec![
@@ -48,10 +47,8 @@ pub fn generate_local(metrics: &[MetricSnapshot], logs: &[LogEvent]) -> String {
     let memory_used = format_bytes(latest.memory.used_bytes);
     let memory_total = format_bytes(latest.memory.total_bytes);
 
-    let error_logs = logs
-        .iter()
-        .filter(|l| matches!(l.severity, Severity::Error | Severity::Critical))
-        .count();
+    let critical_logs = logs.iter().filter(|l| l.severity == Severity::Critical).count();
+    let error_logs = logs.iter().filter(|l| l.severity == Severity::Error).count();
     let warn_logs = logs.iter().filter(|l| l.severity == Severity::Warn).count();
 
     let mut clauses = Vec::new();
@@ -59,15 +56,17 @@ pub fn generate_local(metrics: &[MetricSnapshot], logs: &[LogEvent]) -> String {
     if !latest.ai_servers.is_empty() {
         clauses.push(format!("{} AI server(s)", latest.ai_servers.len()));
     }
-    if error_logs > 0 {
-        clauses.push(format!("{} errors", error_logs));
+    if critical_logs > 0 {
+        clauses.push(format!("{} critical issue{}", critical_logs, if critical_logs == 1 { "" } else { "s" }));
+    } else if error_logs > 0 {
+        clauses.push(format!("{} error{}", error_logs, if error_logs == 1 { "" } else { "s" }));
     } else if warn_logs > 0 {
-        clauses.push(format!("{} warnings", warn_logs));
+        clauses.push(format!("{} warning{}", warn_logs, if warn_logs == 1 { "" } else { "s" }));
     } else {
         clauses.push("logs quiet".to_string());
     }
 
-    if cpu >= 90.0 || memory_pct >= 90.0 || error_logs > 0 {
+    if cpu >= 90.0 || memory_pct >= 90.0 || critical_logs > 0 || error_logs > 0 {
         format!(
             "System under pressure: {} ({}/{} memory used).",
             clauses.join(", "),
@@ -89,11 +88,7 @@ pub fn classify_health(summary: &str) -> HealthStatus {
     let lower = summary.to_lowercase();
     if lower.contains("critical") || lower.contains("failure") || lower.contains("unhealthy") {
         HealthStatus::Unhealthy
-    } else if lower.contains("warning")
-        || lower.contains("high")
-        || lower.contains("degraded")
-        || lower.contains("elevated")
-    {
+    } else if lower.contains("under pressure") || lower.contains("degraded") {
         HealthStatus::Degraded
     } else {
         HealthStatus::Healthy
@@ -103,7 +98,9 @@ pub fn classify_health(summary: &str) -> HealthStatus {
 fn build_insight_prompt(metrics: &[MetricSnapshot], logs: &[LogEvent]) -> (String, String) {
     let system = "You are Observa, a system monitoring assistant. \
 Summarize the health of this system in one terse sentence (max 140 chars). \
-Mention only anomalies or notable trends. If nothing is wrong, say so."
+Mention only real anomalies or notable trends. \
+Do not use words like 'warning' or 'critical' for normal or moderate values. \
+Only say 'critical' if there are critical-severity log events or resource usage above 90%."
         .to_string();
 
     let mut lines = Vec::new();

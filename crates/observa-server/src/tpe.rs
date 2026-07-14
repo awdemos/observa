@@ -65,7 +65,6 @@ pub fn detect_tpe() -> TpeStatus {
         if !lsm.is_empty() {
             for name in lsm.split(',') {
                 match name.trim() {
-                    "selinux" => mechanisms.push("SELinux".to_string()),
                     "apparmor" => mechanisms.push("AppArmor".to_string()),
                     "landlock" => mechanisms.push("Landlock LSM loaded".to_string()),
                     "yama" => mechanisms.push("Yama".to_string()),
@@ -99,8 +98,8 @@ pub fn detect_tpe() -> TpeStatus {
     let recommendation = if enabled {
         "At least one TPE-like protection is active.".to_string()
     } else {
-        "No TPE-like protection detected. Consider enabling a MAC/LSM (SELinux/AppArmor), \
-            fapolicyd, a grsecurity kernel, or running Observa with its built-in Landlock sandbox."
+        "No TPE-like protection detected. Consider enabling AppArmor, fapolicyd, a grsecurity \
+            kernel, or running Observa with its built-in Landlock sandbox."
             .to_string()
     };
 

@@ -202,6 +202,34 @@ async fn mock_llm_url() -> String {
     format!("http://{addr}/v1")
 }
 
+fn mock_alarmist_llm_app() -> Router {
+    Router::new().route("/v1/chat/completions", post(mock_alarmist_complete))
+}
+
+async fn mock_alarmist_complete(Json(_body): Json<serde_json::Value>) -> Json<serde_json::Value> {
+    Json(json!({
+        "choices": [{
+            "message": {
+                "role": "assistant",
+                "content": "Critical failure! The system is on fire and everything is unhealthy."
+            }
+        }]
+    }))
+}
+
+async fn mock_alarmist_llm_url() -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("mock alarmist llm should bind");
+    let addr = listener
+        .local_addr()
+        .expect("mock alarmist llm should have address");
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, mock_alarmist_llm_app()).await;
+    });
+    format!("http://{addr}/v1")
+}
+
 #[tokio::test]
 async fn dashboard_renders_navigation() {
     let app = router(test_state());
@@ -1268,4 +1296,58 @@ async fn acknowledge_alert_rate_limit_returns_429_after_threshold() {
             assert_eq!(response.status(), 429, "request {} should be 429 (rate limited), got {}", i, response.status());
         }
     }
+}
+
+#[tokio::test]
+async fn misleading_llm_summary_keeps_data_driven_healthy_classification() {
+    let config = Config {
+        llm_api_base: mock_alarmist_llm_url().await,
+        llm_api_key: Some("test-key".to_string()),
+        ..Default::default()
+    };
+    let state = Arc::new(
+        AppState::new(config, Bus::new(), None, None).expect("state should build with mock llm"),
+    );
+
+    let metrics = vec![sample_metric()];
+    let logs = vec![LogEvent {
+        ts: chrono::Utc::now(),
+        source: "test".to_string(),
+        unit: None,
+        severity: Severity::Info,
+        message: "routine info log".to_string(),
+        raw: None,
+        security: false,
+    }];
+
+    let summary = observa_server::insight::generate(&state, &metrics, &logs)
+        .await
+        .expect("insight generation should succeed");
+    let lower = summary.to_lowercase();
+    assert!(
+        lower.contains("critical") || lower.contains("fire") || lower.contains("unhealthy"),
+        "mock LLM should return an alarmist summary, got: {summary}"
+    );
+
+    let latest = metrics.last().expect("metrics non-empty");
+    let cpu = latest.cpu.usage_percent;
+    let memory_pct = if latest.memory.total_bytes == 0 {
+        0.0
+    } else {
+        100.0 * latest.memory.used_bytes as f64 / latest.memory.total_bytes as f64
+    };
+
+    let health = observa_server::background::health_from_data(&logs, cpu, memory_pct, false);
+    let severity = observa_server::background::alert_severity_from_data(&logs, cpu, memory_pct, false);
+
+    assert_eq!(
+        health,
+        HealthStatus::Healthy,
+        "alarmist wording should not make a healthy system appear degraded; summary: {summary}"
+    );
+    assert_eq!(
+        severity,
+        Severity::Info,
+        "quiet logs and moderate resources should not raise a security alert; summary: {summary}"
+    );
 }

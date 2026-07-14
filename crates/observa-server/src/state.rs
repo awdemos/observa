@@ -70,6 +70,9 @@ pub struct BackgroundState {
     heartbeat_seq: Arc<AtomicU64>,
     log_explanations: Arc<RwLock<HashMap<String, ExplanationEntry>>>,
     acknowledged_alert_keys: Arc<RwLock<Vec<String>>>,
+    /// Timestamp when CPU first exceeded the critical threshold (>=99%).
+    /// Reset when CPU drops below the threshold.
+    cpu_pressure_since: Arc<RwLock<Option<DateTime<Utc>>>>,
 }
 
 impl BackgroundState {
@@ -81,6 +84,7 @@ impl BackgroundState {
             heartbeat_seq: Arc::new(AtomicU64::new(0)),
             log_explanations: Arc::new(RwLock::new(HashMap::new())),
             acknowledged_alert_keys: Arc::new(RwLock::new(Vec::new())),
+            cpu_pressure_since: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -144,6 +148,14 @@ impl BackgroundState {
 
     pub async fn clear_acknowledged_alerts(&self) {
         self.acknowledged_alert_keys.write().await.clear();
+    }
+
+    pub async fn cpu_pressure_since(&self) -> Option<DateTime<Utc>> {
+        *self.cpu_pressure_since.read().await
+    }
+
+    pub async fn set_cpu_pressure_since(&self, value: Option<DateTime<Utc>>) {
+        *self.cpu_pressure_since.write().await = value;
     }
 }
 
