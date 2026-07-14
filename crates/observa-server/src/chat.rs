@@ -347,7 +347,7 @@ fn prepend_system_prompt(
     mut messages: Vec<ChatMessage>,
     system_prompt: Option<&str>,
 ) -> Vec<ChatMessage> {
-    const DEFAULT_PROMPT: &str = "You are Observa, a terse system observability assistant. Answer in one or two sentences using the provided metrics and logs. Do not show your thinking process, chain-of-thought, or any internal analysis. Only output the final answer.";
+    const DEFAULT_PROMPT: &str = "You are Observa, a friendly and helpful assistant. You can chat about anything the user likes, including casual or off-topic requests. When the user asks about this system, use the provided metrics and logs to give a concise, accurate answer. Keep responses brief unless asked for detail. Do not show your thinking process, chain-of-thought, or any internal analysis.";
     const MAX_PROMPT_LEN: usize = 4000;
     let content = system_prompt
         .map(|s| s.trim())
