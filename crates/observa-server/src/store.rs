@@ -61,6 +61,14 @@ pub trait ChatStore: Send + Sync {
         owner_token: &str,
     ) -> Result<bool, observa_shared::ObservaError>;
 
+    /// Look up a session id by its owner token.  Used by the full-page chat
+    /// route to restore the user's previous session when they navigate back
+    /// to `/chat` without an explicit `session_id` in the URL.
+    async fn session_by_owner_token(
+        &self,
+        owner_token: &str,
+    ) -> Result<Option<Uuid>, observa_shared::ObservaError>;
+
     async fn messages_for_session(&self, session_id: Uuid) -> Result<Vec<ChatMessage>, observa_shared::ObservaError>;
     async fn store_message(
         &self,
@@ -178,6 +186,18 @@ impl ChatStore for DbChatStore {
         } else {
             // In-memory fallback trusts the single-process owner.
             Ok(true)
+        }
+    }
+
+    async fn session_by_owner_token(
+        &self,
+        owner_token: &str,
+    ) -> Result<Option<Uuid>, observa_shared::ObservaError> {
+        if let Some(db) = &self.db {
+            observa_db::chat::session_by_owner_token(db, owner_token).await
+        } else {
+            // No database backing; sessions are ephemeral and cannot be restored.
+            Ok(None)
         }
     }
 
@@ -464,6 +484,17 @@ impl ChatStore for InMemoryChatStore {
             .get(&session_id)
             .map(|s| s.owner_token == owner_token)
             .unwrap_or(false))
+    }
+
+    async fn session_by_owner_token(
+        &self,
+        owner_token: &str,
+    ) -> Result<Option<Uuid>, observa_shared::ObservaError> {
+        let sessions = self.sessions.lock().await;
+        Ok(sessions
+            .iter()
+            .find(|(_, s)| s.owner_token == owner_token)
+            .map(|(id, _)| *id))
     }
 
     async fn messages_for_session(

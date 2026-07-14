@@ -78,6 +78,26 @@ pub async fn verify_session_owner(db: &Db, session_id: Uuid, owner_token: &str) 
     }
 }
 
+pub async fn session_by_owner_token(db: &Db, owner_token: &str) -> Result<Option<Uuid>> {
+    let row = sqlx::query(
+        "SELECT id FROM chat_sessions WHERE owner_token = ?",
+    )
+    .bind(owner_token)
+    .fetch_optional(db.pool())
+    .await
+    .map_err(|e| ObservaError::Database(e.to_string()))?;
+
+    match row {
+        Some(row) => {
+            let id_str: String = row
+                .try_get("id")
+                .map_err(|e| ObservaError::Database(e.to_string()))?;
+            Ok(Some(Uuid::parse_str(&id_str).map_err(|e| ObservaError::Database(e.to_string()))?))
+        }
+        None => Ok(None),
+    }
+}
+
 pub async fn store_message(db: &Db, session_id: Uuid, msg: &ChatMessage) -> Result<()> {
     let id = Uuid::new_v4();
     let ts = Utc::now().to_rfc3339();

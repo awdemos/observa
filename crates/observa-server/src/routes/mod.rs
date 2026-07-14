@@ -627,16 +627,36 @@ async fn build_chat_context(
                 return ctx;
             }
         },
-        None => match state.chat_store.create_session().await {
-            Ok((id, token)) => {
-                ctx.insert("owner_token", &token);
-                id
+        None => {
+            // If the browser already has an owner token (e.g. from a previous
+            // chat), restore that session instead of creating a new one so
+            // history persists across page navigations.
+            let restored = if !owner_token.is_empty() {
+                match state.chat_store.session_by_owner_token(owner_token).await {
+                    Ok(Some(id)) => Some(id),
+                    Ok(None) => None,
+                    Err(error) => {
+                        tracing::warn!(%error, "failed to look up chat session by owner token");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            match restored {
+                Some(id) => id,
+                None => match state.chat_store.create_session().await {
+                    Ok((id, token)) => {
+                        ctx.insert("owner_token", &token);
+                        id
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "failed to create chat session");
+                        return ctx;
+                    }
+                },
             }
-            Err(error) => {
-                tracing::warn!(%error, "failed to create chat session");
-                return ctx;
-            }
-        },
+        }
     };
     let messages = state
         .chat_store
