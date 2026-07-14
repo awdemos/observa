@@ -120,7 +120,7 @@
           <p>How can I help with this system?</p>
         </div>
       </div>
-      <form id="chat-widget-form" class="chat-widget-input-area">
+      <form id="chat-widget-form" class="chat-widget-input-area" onsubmit="event.preventDefault();">
         <input type="hidden" name="session_id" value="">
         <input type="hidden" name="owner_token" value="">
         <input id="chat-widget-input" type="text" name="message" placeholder="Ask Observa…" aria-label="Message" required autocomplete="off">
