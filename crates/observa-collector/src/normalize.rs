@@ -348,18 +348,134 @@ fn contains_any(haystack: &str, needles: &[&str]) -> bool {
 }
 
 fn collect_gpu() -> Vec<observa_shared::GpuMetrics> {
-    let output = match std::process::Command::new("nvidia-smi")
+    if let Some(gpus) = collect_gpu_nvidia_smi() {
+        return gpus;
+    }
+    collect_gpu_sysfs()
+}
+
+fn collect_gpu_nvidia_smi() -> Option<Vec<observa_shared::GpuMetrics>> {
+    let output = std::process::Command::new("nvidia-smi")
         .args([
             "--query-gpu=name,utilization.gpu,memory.used,memory.total,pcie.link.gen.max,pcie.link.width.max",
             "--format=csv,noheader,nounits",
         ])
         .output()
-    {
-        Ok(o) if o.status.success() => o.stdout,
-        _ => return Vec::new(),
-    };
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let gpus = parse_gpu_output(&String::from_utf8_lossy(&output.stdout));
+    if gpus.is_empty() {
+        return None;
+    }
+    Some(gpus)
+}
 
-    parse_gpu_output(&String::from_utf8_lossy(&output))
+/// Fallback GPU discovery using sysfs DRM/PCI entries.
+///
+/// Inside containers `nvidia-smi` may be absent or unable to reach the driver,
+/// but `/sys/class/drm` and `/sys/bus/pci/devices` are often still mounted.
+/// This scans for GPUs by PCI vendor ID and reports at least their names.
+fn collect_gpu_sysfs() -> Vec<observa_shared::GpuMetrics> {
+    let mut gpus = Vec::new();
+
+    // DRM cards are the most portable signal. Each cardX links to its PCI device.
+    for entry in std::fs::read_dir("/sys/class/drm").ok().into_iter().flatten() {
+        let entry = match entry {
+            Ok(e) => e,
+            _ => continue,
+        };
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if !name.starts_with("card") || name.contains('-') {
+            continue;
+        }
+        let device = entry.path().join("device");
+        if !device.is_dir() {
+            continue;
+        }
+        let vendor = read_sys_hex(&device.join("vendor")).unwrap_or(0);
+        let gpu_name = gpu_name_from_pci_device(&device);
+        if let Some(gpu) = build_gpu_from_vendor(vendor, &gpu_name) {
+            gpus.push(gpu);
+        }
+    }
+
+    if gpus.is_empty() {
+        for entry in std::fs::read_dir("/sys/bus/pci/devices").ok().into_iter().flatten() {
+            let entry = match entry {
+                Ok(e) => e,
+                _ => continue,
+            };
+            let device = entry.path();
+            let vendor = read_sys_hex(&device.join("vendor")).unwrap_or(0);
+            let class = read_sys_hex(&device.join("class")).unwrap_or(0);
+            let is_display = class == 0x030000
+                || class == 0x030200
+                || (class & 0xff0000) == 0x030000;
+            if !is_display {
+                continue;
+            }
+            let gpu_name = gpu_name_from_pci_device(&device);
+            if let Some(gpu) = build_gpu_from_vendor(vendor, &gpu_name) {
+                gpus.push(gpu);
+            }
+        }
+    }
+
+    gpus
+}
+
+fn read_sys_hex(path: &std::path::Path) -> Option<u32> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let trimmed = text.trim();
+    if let Some(hex) = trimmed.strip_prefix("0x") {
+        u32::from_str_radix(hex, 16).ok()
+    } else {
+        trimmed.parse::<u32>().ok()
+    }
+}
+
+fn gpu_name_from_pci_device(device: &std::path::Path) -> String {
+    // Prefer the already-resolved model name from udev / kernel.
+    if let Ok(model) = std::fs::read_to_string(device.join("model")) {
+        let model = model.trim();
+        if !model.is_empty() {
+            return model.to_string();
+        }
+    }
+
+    // Try the subsystem device/vendor IDs to build a readable-ish name.
+    let vendor = read_sys_hex(&device.join("vendor")).unwrap_or(0);
+    let device_id = read_sys_hex(&device.join("device")).unwrap_or(0);
+    let subvendor = read_sys_hex(&device.join("subsystem_vendor")).unwrap_or(0);
+    let subdevice = read_sys_hex(&device.join("subsystem_device")).unwrap_or(0);
+
+    if vendor == 0x10de {
+        return format!("NVIDIA GPU {:04x}:{:04x} (sub {:04x}:{:04x})", vendor, device_id, subvendor, subdevice);
+    }
+    if vendor == 0x1002 {
+        return format!("AMD GPU {:04x}:{:04x} (sub {:04x}:{:04x})", vendor, device_id, subvendor, subdevice);
+    }
+    if vendor == 0x8086 {
+        return format!("Intel GPU {:04x}:{:04x} (sub {:04x}:{:04x})", vendor, device_id, subvendor, subdevice);
+    }
+    format!("GPU {:04x}:{:04x} (sub {:04x}:{:04x})", vendor, device_id, subvendor, subdevice)
+}
+
+fn build_gpu_from_vendor(vendor: u32, name: &str) -> Option<observa_shared::GpuMetrics> {
+    // Skip Intel iGPUs: users with a discrete GPU don't count them as a GPU.
+    match vendor {
+        0x10de | 0x1002 => Some(observa_shared::GpuMetrics {
+            name: name.to_string(),
+            usage_percent: 0.0,
+            memory_used_bytes: 0,
+            memory_total_bytes: 0,
+            bandwidth_bytes_per_sec: 0.0,
+        }),
+        _ => None,
+    }
 }
 
 fn parse_gpu_output(text: &str) -> Vec<observa_shared::GpuMetrics> {
@@ -480,5 +596,19 @@ SwapFree:        2097152 kB
         assert_eq!(gpus.len(), 1);
         // Gen4 = 2 GB/s per lane duplex, 16 lanes: 64 GB/s.
         assert_eq!(gpus[0].bandwidth_bytes_per_sec, 64.0 * 1_000_000_000.0);
+    }
+
+    #[test]
+    fn build_gpu_from_vendor_accepts_discrete_vendors_only() {
+        assert!(build_gpu_from_vendor(0x10de, "NVIDIA GPU").is_some());
+        assert!(build_gpu_from_vendor(0x1002, "AMD GPU").is_some());
+        assert!(build_gpu_from_vendor(0x8086, "Intel GPU").is_none());
+        assert!(build_gpu_from_vendor(0x1234, "Unknown").is_none());
+    }
+
+    #[test]
+    fn gpu_name_from_pci_device_builds_nvidia_label() {
+        let name = gpu_name_from_pci_device(std::path::Path::new("/nonexistent"));
+        assert!(name.starts_with("GPU "));
     }
 }

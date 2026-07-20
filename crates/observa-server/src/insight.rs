@@ -66,21 +66,25 @@ pub fn generate_local(metrics: &[MetricSnapshot], logs: &[LogEvent]) -> String {
         clauses.push("logs quiet".to_string());
     }
 
-    if cpu >= 90.0 || memory_pct >= 90.0 || critical_logs > 0 || error_logs > 0 {
-        format!(
-            "System under pressure: {} ({}/{} memory used).",
-            clauses.join(", "),
-            memory_used,
-            memory_total
-        )
+    let headline = if critical_logs > 0 {
+        if cpu >= 98.0 || memory_pct >= 98.0 {
+            "System is under severe pressure"
+        } else {
+            "System needs attention"
+        }
+    } else if cpu >= 98.0 || memory_pct >= 98.0 {
+        "System is busy"
     } else {
-        format!(
-            "System looks stable: {} ({}/{} memory used).",
-            clauses.join(", "),
-            memory_used,
-            memory_total
-        )
-    }
+        "System looks stable"
+    };
+
+    format!(
+        "{}: {} ({}/{} memory used).",
+        headline,
+        clauses.join(", "),
+        memory_used,
+        memory_total
+    )
 }
 
 /// Classify a free-text insight summary into a coarse health status.

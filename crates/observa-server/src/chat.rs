@@ -9,14 +9,14 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::unbounded_channel;
-use tokio::time::timeout;
+
 use tokio_stream::{wrappers::UnboundedReceiverStream, StreamExt};
 use uuid::Uuid;
 
 use observa_shared::{format_bytes, ChatMessage, Event, LogEvent, MetricSnapshot, ObservaError, Result, Role};
 
 use crate::auth::{chat_owner_token_from_headers, owner_token_cookie};
-use crate::llm::{complete_with_fallback, strip_reasoning_chain};
+use crate::llm::{complete_stream_with_fallback, complete_with_fallback, strip_reasoning_chain};
 use crate::llm_sanitize::{clamp_prompt, format_log_sanitized, sanitize_for_prompt, validate_message_length};
 use crate::rate_limit::{rate_limit_check, RateLimitConfig};
 use crate::state::AppState;
@@ -233,17 +233,7 @@ async fn do_stream(
         )
         .await?;
 
-    if let Some(llm) = &state.llm {
-        let stream = match timeout(chat_llm_timeout(), llm.complete_stream(&prompt)).await {
-            Ok(Ok(stream)) => stream,
-            Ok(Err(e)) => return Err(e),
-            Err(_) => {
-                return Err(ObservaError::Llm(
-                    "llm stream timed out".to_string(),
-                ));
-            }
-        };
-
+    if let Some(stream) = complete_stream_with_fallback(&state, &prompt, chat_llm_timeout()).await? {
         let bus = state.bus.clone();
         let chat_store = state.chat_store.clone();
         let (tx, rx) = unbounded_channel();

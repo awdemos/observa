@@ -368,8 +368,9 @@ fn spawn_insight_digest(state: SharedState, shutdown: watch::Receiver<bool>) -> 
 
             if health != HealthStatus::Healthy {
                 let severity = alert_severity_from_data(&logs, cpu, memory_pct, sustained_critical);
-                if severity == Severity::Info {
-                    // No actionable issue; don't raise a security alert.
+                // Only raise a security alert for genuine emergencies. Isolated error logs
+                // and brief load spikes should show in the dashboard without paging the operator.
+                if severity < Severity::Critical {
                     continue;
                 }
                 let alert_event = LogEvent {
@@ -417,12 +418,11 @@ pub fn health_from_data(
     memory_pct: f64,
     sustained_critical_cpu: bool,
 ) -> HealthStatus {
-    let has_error = logs.iter().any(|l| l.severity == Severity::Error);
     let has_critical_log = logs.iter().any(|l| l.severity == Severity::Critical);
 
-    if sustained_critical_cpu {
+    if sustained_critical_cpu || has_critical_log {
         HealthStatus::Unhealthy
-    } else if has_critical_log || has_error || cpu >= 90.0 || memory_pct >= 90.0 {
+    } else if cpu >= 98.0 || memory_pct >= 98.0 {
         HealthStatus::Degraded
     } else {
         HealthStatus::Healthy
@@ -436,15 +436,11 @@ pub fn alert_severity_from_data(
     sustained_critical_cpu: bool,
 ) -> Severity {
     let has_critical_log = logs.iter().any(|l| l.severity == Severity::Critical);
-    let has_error = logs.iter().any(|l| l.severity == Severity::Error);
-    let has_warn = logs.iter().any(|l| l.severity == Severity::Warn);
 
-    if sustained_critical_cpu {
+    if sustained_critical_cpu || has_critical_log {
         Severity::Critical
-    } else if has_critical_log || has_error || cpu >= 90.0 || memory_pct >= 90.0 {
+    } else if cpu >= 98.0 || memory_pct >= 98.0 {
         Severity::Error
-    } else if has_warn || cpu >= 70.0 || memory_pct >= 70.0 {
-        Severity::Warn
     } else {
         Severity::Info
     }
@@ -475,14 +471,23 @@ mod tests {
     }
 
     #[test]
-    fn degraded_on_error_log_or_high_cpu() {
+    fn degraded_on_critical_log_or_severe_pressure() {
+        // Isolated error logs are no longer enough to degrade health or page the operator.
         let logs = vec![log(Severity::Error)];
-        assert_eq!(health_from_data(&logs, 10.0, 40.0, false), HealthStatus::Degraded);
-        assert_eq!(alert_severity_from_data(&logs, 10.0, 40.0, false), Severity::Error);
+        assert_eq!(health_from_data(&logs, 10.0, 40.0, false), HealthStatus::Healthy);
+        assert_eq!(alert_severity_from_data(&logs, 10.0, 40.0, false), Severity::Info);
 
+        // Critical logs are still actionable.
+        let logs = vec![log(Severity::Critical)];
+        assert_eq!(health_from_data(&logs, 10.0, 40.0, false), HealthStatus::Unhealthy);
+        assert_eq!(alert_severity_from_data(&logs, 10.0, 40.0, false), Severity::Critical);
+
+        // Very high CPU without logs only degrades at the raised threshold.
         let logs = vec![log(Severity::Info)];
-        assert_eq!(health_from_data(&logs, 95.0, 50.0, false), HealthStatus::Degraded);
-        assert_eq!(alert_severity_from_data(&logs, 95.0, 50.0, false), Severity::Error);
+        assert_eq!(health_from_data(&logs, 97.0, 50.0, false), HealthStatus::Healthy);
+        assert_eq!(alert_severity_from_data(&logs, 97.0, 50.0, false), Severity::Info);
+        assert_eq!(health_from_data(&logs, 98.0, 50.0, false), HealthStatus::Degraded);
+        assert_eq!(alert_severity_from_data(&logs, 98.0, 50.0, false), Severity::Error);
     }
 
     #[test]
