@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use observa_shared::{ChatMessage, HealthStatus, InsightSnapshot, LogEvent, Role};
@@ -37,7 +37,9 @@ pub fn api_routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/alerts/acknowledged", get(list_acknowledged_alerts))
         .route("/alerts/verify-chain", get(verify_alert_chain))
         .route("/alerts/export", get(export_alerts))
-        .route("/chat/session", post(chat::create_session))
+    .route("/chat/session", post(chat::create_session))
+        .route("/chat/sessions", get(chat::list_sessions))
+        .route("/chat/session/{id}", delete(chat::delete_session))
         .route("/chat/ask", post(chat::ask))
         .route("/chat/ask-html", post(chat::ask_html))
         .route("/chat/stream", get(chat::stream))

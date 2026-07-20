@@ -1,8 +1,8 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use sqlx::Row;
 use uuid::Uuid;
 
-use observa_shared::{ChatMessage, ObservaError, Result, Role};
+use observa_shared::{ChatMessage, ChatSessionSummary, ObservaError, Result, Role};
 
 use crate::pool::Db;
 
@@ -140,4 +140,85 @@ pub async fn messages_for_session(db: &Db, session_id: Uuid) -> Result<Vec<ChatM
     }
 
     Ok(messages)
+}
+
+pub async fn list_sessions(db: &Db, owner_token: &str) -> Result<Vec<ChatSessionSummary>> {
+    let rows = sqlx::query(
+        "SELECT s.id, s.created_at, m.content AS last_content, m.role AS last_role
+         FROM chat_sessions s
+         LEFT JOIN (
+             SELECT session_id, content, role,
+                    ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY ts DESC) AS rn
+             FROM chat_messages
+         ) m ON m.session_id = s.id AND m.rn = 1
+         WHERE s.owner_token = ?
+         ORDER BY s.created_at DESC",
+    )
+    .bind(owner_token)
+    .fetch_all(db.pool())
+    .await
+    .map_err(|e| ObservaError::Database(e.to_string()))?;
+
+    let mut sessions = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id_str: String = row
+            .try_get("id")
+            .map_err(|e| ObservaError::Database(e.to_string()))?;
+        let id = Uuid::parse_str(&id_str).map_err(|e| ObservaError::Database(e.to_string()))?;
+        let created_at_str: String = row
+            .try_get("created_at")
+            .map_err(|e| ObservaError::Database(e.to_string()))?;
+        let created_at = DateTime::parse_from_rfc3339(&created_at_str)
+            .map_err(|e| ObservaError::Database(e.to_string()))?
+            .with_timezone(&Utc);
+        let preview = row
+            .try_get::<Option<String>, _>("last_content")
+            .ok()
+            .flatten()
+            .map(|content| {
+                let preview = content.chars().take(80).collect::<String>();
+                if content.chars().count() > 80 {
+                    preview + "…"
+                } else {
+                    preview
+                }
+            })
+            .unwrap_or_default();
+        sessions.push(ChatSessionSummary {
+            id,
+            created_at,
+            last_message_preview: preview,
+        });
+    }
+
+    Ok(sessions)
+}
+
+pub async fn delete_session(db: &Db, session_id: Uuid, owner_token: &str) -> Result<bool> {
+    let mut tx = db
+        .pool()
+        .begin()
+        .await
+        .map_err(|e| ObservaError::Database(e.to_string()))?;
+
+    sqlx::query("DELETE FROM chat_messages WHERE session_id = ?")
+        .bind(session_id.to_string())
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| ObservaError::Database(e.to_string()))?;
+
+    let delete_session = sqlx::query(
+        "DELETE FROM chat_sessions WHERE id = ? AND owner_token = ?",
+    )
+    .bind(session_id.to_string())
+    .bind(owner_token)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| ObservaError::Database(e.to_string()))?;
+
+    tx.commit()
+        .await
+        .map_err(|e| ObservaError::Database(e.to_string()))?;
+
+    Ok(delete_session.rows_affected() > 0)
 }

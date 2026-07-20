@@ -3,24 +3,35 @@
 {% block title %}Assistant | Observa{% endblock title %}
 
 {% block content %}
-<section class="panel chat-panel" data-session="{{ session_id }}" data-owner-token="{{ owner_token }}">
-  <div class="section-header">
-    <h2>Assistant</h2>
-  </div>
-  <div id="chat-messages" class="chat-messages">
-    {% include "partials/chat_messages.html" %}
-  </div>
+<div class="chat-layout">
+  <section class="panel chat-panel" data-session="{{ session_id }}" data-owner-token="{{ owner_token }}">
+    <div class="section-header">
+      <h2>Assistant</h2>
+      <span class="section-meta" id="chat-status" aria-live="polite"></span>
+    </div>
+    <div id="chat-messages" class="chat-messages">
+      {% include "partials/chat_messages.html" %}
+    </div>
 
-  <form id="chat-form"
-        class="chat-form"
-        data-session="{{ session_id }}"
-        data-owner-token="{{ owner_token }}"
-        onsubmit="event.preventDefault();">
-    <input type="hidden" name="session_id" value="{{ session_id }}">
-    <input type="hidden" name="owner_token" value="{{ owner_token }}">
-    <input id="chat-input" type="text" name="message" placeholder="Ask Observa…" aria-label="Message" required autocomplete="off">
-    <button type="submit">Send</button>
-    <span id="chat-spinner" class="spinner" aria-hidden="true">●</span>
-  </form>
-</section>
+    <form id="chat-form"
+          class="chat-form"
+          data-session="{{ session_id }}"
+          data-owner-token="{{ owner_token }}"
+          onsubmit="event.preventDefault();">
+      <input type="hidden" name="session_id" value="{{ session_id }}">
+      <input type="hidden" name="owner_token" value="{{ owner_token }}">
+      <input id="chat-input" type="text" name="message" placeholder="Ask Observa…" aria-label="Message" required autocomplete="off">
+      <button type="submit">Send</button>
+      <span id="chat-spinner" class="spinner" aria-hidden="true">●</span>
+    </form>
+  </section>
+
+  <section class="panel chat-history" id="chat-history">
+    <div class="section-header">
+      <h2>History</h2>
+      <span class="section-meta" id="session-count"></span>
+    </div>
+    {% include "partials/chat_sessions.html" %}
+  </section>
+</div>
 {% endblock content %}

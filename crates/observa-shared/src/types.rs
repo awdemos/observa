@@ -170,6 +170,13 @@ pub struct ChatMessage {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ChatSessionSummary {
+    pub id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub last_message_preview: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HeartbeatEvent {
     pub ts: DateTime<Utc>,
     pub seq: u64,

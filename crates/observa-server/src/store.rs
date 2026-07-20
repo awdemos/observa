@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use observa_db::Db;
-use observa_shared::{ChatMessage, LogEvent, MetricSnapshot, SecurityAlert};
+use observa_shared::{ChatMessage, ChatSessionSummary, LogEvent, MetricSnapshot, SecurityAlert};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -75,6 +75,17 @@ pub trait ChatStore: Send + Sync {
         session_id: Uuid,
         msg: &ChatMessage,
     ) -> Result<(), observa_shared::ObservaError>;
+
+    async fn list_sessions(
+        &self,
+        owner_token: &str,
+    ) -> Result<Vec<ChatSessionSummary>, observa_shared::ObservaError>;
+
+    async fn delete_session(
+        &self,
+        session_id: Uuid,
+        owner_token: &str,
+    ) -> Result<bool, observa_shared::ObservaError>;
 }
 
 /// Production adapter: SQLite first, Redis fallback, empty result on total
@@ -221,6 +232,29 @@ impl ChatStore for DbChatStore {
             observa_db::chat::store_message(db, session_id, msg).await
         } else {
             Ok(())
+        }
+    }
+
+    async fn list_sessions(
+        &self,
+        owner_token: &str,
+    ) -> Result<Vec<ChatSessionSummary>, observa_shared::ObservaError> {
+        if let Some(db) = &self.db {
+            observa_db::chat::list_sessions(db, owner_token).await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    async fn delete_session(
+        &self,
+        session_id: Uuid,
+        owner_token: &str,
+    ) -> Result<bool, observa_shared::ObservaError> {
+        if let Some(db) = &self.db {
+            observa_db::chat::delete_session(db, session_id, owner_token).await
+        } else {
+            Ok(false)
         }
     }
 }
@@ -520,6 +554,56 @@ impl ChatStore for InMemoryChatStore {
         messages.push_back((session_id, msg.clone()));
         messages.truncate(self.capacity);
         Ok(())
+    }
+
+    async fn list_sessions(
+        &self,
+        owner_token: &str,
+    ) -> Result<Vec<ChatSessionSummary>, observa_shared::ObservaError> {
+        let sessions = self.sessions.lock().await;
+        let messages = self.messages.lock().await;
+        let mut summaries = Vec::new();
+        for (id, session) in sessions.iter() {
+            if session.owner_token != owner_token {
+                continue;
+            }
+            let preview = messages
+                .iter()
+                .rev()
+                .find(|(sid, _)| sid == id)
+                .map(|(_, m)| {
+                    let p: String = m.content.chars().take(80).collect();
+                    if m.content.chars().count() > 80 {
+                        p + "…"
+                    } else {
+                        p
+                    }
+                })
+                .unwrap_or_default();
+            summaries.push(ChatSessionSummary {
+                id: *id,
+                created_at: chrono::Utc::now(),
+                last_message_preview: preview,
+            });
+        }
+        summaries.reverse();
+        Ok(summaries)
+    }
+
+    async fn delete_session(
+        &self,
+        session_id: Uuid,
+        owner_token: &str,
+    ) -> Result<bool, observa_shared::ObservaError> {
+        let mut sessions = self.sessions.lock().await;
+        let removed = sessions
+            .remove(&session_id)
+            .is_some_and(|s| s.owner_token == owner_token);
+        if removed {
+            let mut messages = self.messages.lock().await;
+            messages.retain(|(sid, _)| sid != &session_id);
+        }
+        Ok(removed)
     }
 }
 

@@ -2,11 +2,11 @@ use std::error::Error as StdError;
 use std::sync::Arc;
 
 use axum::{
-    extract::{OriginalUri, Query, State},
+    extract::{OriginalUri, Path, Query, State},
     http::header,
     middleware,
     response::{Html, IntoResponse, Response},
-    routing::{get, get_service, post},
+    routing::{delete, get, get_service, post},
     Router,
 };
 use tower_http::{
@@ -54,6 +54,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/ai-servers", get(ai_servers_page))
         .route("/status", get(status_page))
         .route("/chat", get(chat_page))
+        .route("/chat/session/{id}/delete", delete(delete_chat_session))
         .route("/login", get(login_page))
         .route("/login", post(login_submit))
         .route("/logout", post(logout))
@@ -303,8 +304,6 @@ async fn chat_page(
     }
     let owner_token = chat_owner_token(&request).or(query.owner_token.clone()).unwrap_or_default();
     let mut ctx = build_chat_context(&state, query.session_id, &owner_token).await;
-    // build_chat_context inserts owner_token only when it creates a new session;
-    // make sure the queried token is available to the template as well.
     let token_for_cookie = ctx
         .get("owner_token")
         .and_then(|v| v.as_str())
@@ -324,6 +323,36 @@ async fn chat_page(
         html,
     )
         .into_response()
+}
+
+async fn delete_chat_session(
+    State(state): State<Arc<AppState>>,
+    OriginalUri(_uri): OriginalUri,
+    ClientIp(addr): ClientIp,
+    Path(session_id): Path<Uuid>,
+    request: axum::extract::Request,
+) -> Response {
+    if let Err(resp) = rate_limit_check(&state, "delete_chat_session", addr, HTML_RATE_LIMIT).await {
+        return resp.into_response();
+    }
+    let owner_token = chat_owner_token(&request).unwrap_or_default();
+    match state.chat_store.delete_session(session_id, &owner_token).await {
+        Ok(true) => {
+            let mut ctx = build_chat_context(&state, None, &owner_token).await;
+            insert_path(&mut ctx, "/chat");
+            render(&state, "chat.html", &ctx).into_response()
+        }
+        Ok(false) => (
+            axum::http::StatusCode::NOT_FOUND,
+            format!("Session {session_id} not found"),
+        )
+            .into_response(),
+        Err(err) => (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to delete session: {err}"),
+        )
+            .into_response(),
+    }
 }
 
 async fn login_page(
@@ -664,8 +693,14 @@ async fn build_chat_context(
         .messages_for_session(session_id)
         .await
         .unwrap_or_default();
+    let sessions = state
+        .chat_store
+        .list_sessions(owner_token)
+        .await
+        .unwrap_or_default();
     ctx.insert("session_id", &session_id.to_string());
     ctx.insert("messages", &messages);
+    ctx.insert("sessions", &sessions);
     ctx
 }
 

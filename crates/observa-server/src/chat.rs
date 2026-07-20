@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
-    extract::{Query, State},
-
+    extract::{Path, Query, State},
+    http::StatusCode,
     response::{sse::Event as SseEvent, Html, IntoResponse, Sse},
     Json,
 };
@@ -74,13 +74,47 @@ pub struct StreamQuery {
     system_prompt: Option<String>,
 }
 
+pub async fn list_sessions(
+    State(state): State<Arc<AppState>>,
+    crate::rate_limit::ClientIp(addr): crate::rate_limit::ClientIp,
+    headers: axum::http::HeaderMap,
+) -> axum::response::Response {
+    if let Err(resp) = rate_limit_check(&state, "chat_sessions", addr, CHAT_RATE_LIMIT).await {
+        return resp.into_response();
+    }
+    let owner_token = chat_owner_token_from_headers(&headers).unwrap_or_default();
+    match state.chat_store.list_sessions(&owner_token).await {
+        Ok(sessions) => Json(sessions).into_response(),
+        Err(err) => error_response(err),
+    }
+}
+
+pub async fn delete_session(
+    State(state): State<Arc<AppState>>,
+    crate::rate_limit::ClientIp(addr): crate::rate_limit::ClientIp,
+    headers: axum::http::HeaderMap,
+    Path(session_id): Path<Uuid>,
+) -> axum::response::Response {
+    if let Err(resp) = rate_limit_check(&state, "chat_delete_session", addr, CHAT_RATE_LIMIT).await {
+        return resp.into_response();
+    }
+    let owner_token = chat_owner_token_from_headers(&headers).unwrap_or_default();
+    match state.chat_store.delete_session(session_id, &owner_token).await {
+        Ok(true) => (StatusCode::NO_CONTENT).into_response(),
+        Ok(false) => (StatusCode::NOT_FOUND).into_response(),
+        Err(err) => error_response(err),
+    }
+}
+
 pub async fn create_session(
     State(state): State<Arc<AppState>>,
     crate::rate_limit::ClientIp(addr): crate::rate_limit::ClientIp,
+    headers: axum::http::HeaderMap,
 ) -> axum::response::Response {
-    if let Err(resp) = rate_limit_check(&state, "chat_session", addr, CHAT_RATE_LIMIT).await {
+    if let Err(resp) = rate_limit_check(&state, "chat_sessions", addr, CHAT_RATE_LIMIT).await {
         return resp.into_response();
     }
+    let _owner_token = chat_owner_token_from_headers(&headers).unwrap_or_default();
     match state.chat_store.create_session().await {
         Ok((session_id, owner_token)) => {
             (
