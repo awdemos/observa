@@ -224,19 +224,6 @@ impl Default for Config {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ai_server_config_defaults_to_empty() {
-        let config = Config::default();
-        assert!(config.ai_servers.is_empty());
-        assert_eq!(config.ai_server_poll_interval_ms, 10_000);
-        assert_eq!(config.ai_server_probe_timeout_ms, 5_000);
-    }
-}
-
 impl Config {
     pub fn load(cli: &Cli) -> Result<Self> {
         dotenvy::dotenv().ok();
@@ -305,5 +292,18 @@ impl Config {
         }
 
         raw.resolve()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ai_server_config_defaults_to_empty() {
+        let config = Config::default();
+        assert!(config.ai_servers.is_empty());
+        assert_eq!(config.ai_server_poll_interval_ms, 10_000);
+        assert_eq!(config.ai_server_probe_timeout_ms, 5_000);
     }
 }

@@ -82,7 +82,7 @@ async fn poller_marks_remote_endpoint_online_and_lists_models() {
     assert_eq!(servers[0].models, vec!["mock-model"]);
     assert!(servers[0].latency_ms.is_some());
 
-    let _ = handle.abort();
+    handle.abort();
 }
 
 #[tokio::test]
@@ -101,5 +101,5 @@ async fn poller_marks_unreachable_endpoint_offline() {
     assert_eq!(servers[0].status, AiServerStatus::Offline);
     assert!(servers[0].last_error.is_some());
 
-    let _ = handle.abort();
+    handle.abort();
 }
