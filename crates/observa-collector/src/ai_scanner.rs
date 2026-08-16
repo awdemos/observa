@@ -348,12 +348,15 @@ fn build_server(display: &str, base_url: &str, kind: AiServerKind, models: Vec<S
         .and_then(|p| p.parse::<u16>().ok());
 
     AiServerMetrics {
-        pid: 0,
+        pid: None,
         kind,
         name,
         port_hint,
         endpoint: Some(base_url.to_string()),
+        status: Default::default(),
+        latency_ms: None,
         models,
+        last_error: None,
         cpu_percent: 0.0,
         memory_bytes: 0,
     }

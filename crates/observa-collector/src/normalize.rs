@@ -330,12 +330,15 @@ fn detect_ai_servers(processes: &[ProcessMetrics]) -> Vec<AiServerMetrics> {
                 None
             };
             kind.map(|kind| AiServerMetrics {
-                pid: p.pid,
+                pid: Some(p.pid),
                 kind,
                 name: p.name.clone(),
                 port_hint: None,
                 endpoint: None,
+                status: Default::default(),
+                latency_ms: None,
                 models: Vec::new(),
+                last_error: None,
                 cpu_percent: p.cpu_percent,
                 memory_bytes: p.memory_bytes,
             })
