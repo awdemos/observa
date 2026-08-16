@@ -1,22 +1,31 @@
 <script type="application/json" id="ai-server-data">
 [
   {% for s in servers %}
-  {"kind": "{{ s.kind|json_escape }}", "name": "{{ s.name|json_escape }}", "pid": {{ s.pid }}, "cpu_pct": {{ s.cpu_pct_num }}, "memory_bytes": {{ s.memory_bytes }}, "port_hint": {% if s.port_hint %}{{ s.port_hint }}{% else %}null{% endif %}, "endpoint": {% if s.endpoint %}"{{ s.endpoint|json_escape }}"{% else %}null{% endif %}, "models": [{% for m in s.models %}"{{ m|json_escape }}"{% if not loop.last %},{% endif %}{% endfor %}]}{% if not loop.last %},{% endif %}
+  {"kind": "{{ s.kind|json_escape }}", "name": "{{ s.name|json_escape }}", "pid": {% if s.pid %}{{ s.pid }}{% else %}null{% endif %}, "cpu_pct": {{ s.cpu_pct_num }}, "memory_bytes": {{ s.memory_bytes }}, "port_hint": {% if s.port_hint %}{{ s.port_hint }}{% else %}null{% endif %}, "endpoint": {% if s.endpoint %}"{{ s.endpoint|json_escape }}"{% else %}null{% endif %}, "status": "{{ s.status|json_escape }}", "latency_ms": {% if s.latency_ms %}{{ s.latency_ms }}{% else %}null{% endif %}, "models": [{% for m in s.models %}"{{ m|json_escape }}"{% if not loop.last %},{% endif %}{% endfor %}]}{% if not loop.last %},{% endif %}
   {% endfor %}
 ]
 </script>
 {% if servers %}
   <div class="ai-server-grid">
     {% for s in servers %}
-      <div class="ai-server-card">
+      <div class="ai-server-card {{ s.status_class }}">
         <div class="ai-server-header">
           <div class="ai-server-kind">{{ s.kind }}</div>
-          <div class="ai-server-name">{{ s.name }}</div>
+          <div class="ai-server-status {{ s.status_class }}">{{ s.status }}</div>
         </div>
+        <div class="ai-server-name">{{ s.name }}</div>
         <div class="ai-server-meta">
+          {% if s.pid %}
           <span class="ai-server-pid">PID {{ s.pid }}</span>
+          {% endif %}
+          {% if s.latency_ms %}
+          <span class="ai-server-latency">{{ s.latency_ms }} ms</span>
+          {% endif %}
+          {% if not s.is_remote %}
           <span class="ai-server-memory">{{ s.memory }}</span>
+          {% endif %}
         </div>
+        {% if not s.is_remote %}
         <div class="ai-server-meter">
           <span class="ai-server-meter-label">CPU</span>
           <div class="ai-server-meter-bar">
@@ -24,7 +33,7 @@
           </div>
           <span class="ai-server-meter-value">{{ s.cpu_pct }}</span>
         </div>
-        
+        {% endif %}
         {% if s.endpoint %}
         <div class="ai-server-endpoint">
           <a href="{{ s.endpoint }}" target="_blank" rel="noopener noreferrer">{{ s.endpoint }}</a>
@@ -35,6 +44,9 @@
           <span class="ai-server-models-label">Models:</span>
           <span class="ai-server-models-list">{% for m in s.models %}{{ m }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
         </div>
+        {% endif %}
+        {% if s.last_error %}
+        <div class="ai-server-error" title="{{ s.last_error }}">Offline: {{ s.last_error }}</div>
         {% endif %}
       </div>
     {% endfor %}
