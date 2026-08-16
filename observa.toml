@@ -7,6 +7,16 @@ llm_model = "llama"
 sample_interval_ms = 2000
 log_source = "journald"
 log_tail = true
-# Optional: extra AI inference endpoints to probe for the AI Servers page.
-# Defaults include common Docker Compose service names and host loopback ports.
-# ai_server_endpoints = ["llama-server:8080", "ollama:11434"]
+# Optional: remote AI inference endpoints to monitor as part of the fleet.
+# Each endpoint must expose an OpenAI-compatible `/v1/models` route.
+# If no [[ai_server]] entries are configured, Observa only shows local servers.
+# ai_server_poll_interval_ms = 10000
+# ai_server_probe_timeout_ms = 5000
+# [[ai_server]]
+# endpoint = "http://localhost:11434/v1"
+# name = "lab-ollama"
+# kind = "ollama"
+# [[ai_server]]
+# endpoint = "http://192.168.1.10:8000/v1"
+# name = "lab-vllm"
+# kind = "vllm"
