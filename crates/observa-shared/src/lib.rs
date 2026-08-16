@@ -3,8 +3,8 @@ pub mod types;
 
 pub use error::{ObservaError, Result};
 pub use types::{
-    format_bytes, format_rate, memory_pct, severity_class, AiServerKind, AiServerMetrics, ChatMessage,
-    ChatSessionSummary, CpuMetrics, DiskMetrics, Event, GpuMetrics, HealthStatus, HeartbeatEvent,
-    InsightSnapshot, LogEvent, LogSource, MemoryMetrics, MetricSnapshot, NetworkMetrics, ProcessMetrics, Role,
-    SecurityAlert, Severity, SwapMetrics,
+    format_bytes, format_rate, memory_pct, severity_class, AiServerEvent, AiServerKind, AiServerMetrics,
+    AiServerStatus, ChatMessage, ChatSessionSummary, CpuMetrics, DiskMetrics, Event, GpuMetrics, HealthStatus,
+    HeartbeatEvent, InsightSnapshot, LogEvent, LogSource, MemoryMetrics, MetricSnapshot, NetworkMetrics,
+    ProcessMetrics, Role, SecurityAlert, Severity, SwapMetrics,
 };
