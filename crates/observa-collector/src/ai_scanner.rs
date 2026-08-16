@@ -22,6 +22,7 @@ const INFERENCE_PORTS: &[u16] = &[
     1234,  // LM Studio
     5000,  // TabbyAPI, Flask
     30000, // SGLang
+    52415, // Exo Labs distributed inference cluster master
     8001,  // Triton HTTP secondary
     8002,  // Triton gRPC (not HTTP, but listed for completeness)
     5001,  // common alternate
@@ -217,13 +218,30 @@ async fn probe_endpoint(client: &Client, base_url: &str, label: &str) -> Option<
                     Ok(b) => b,
                     Err(e) => {
                         debug!(url = %url, error = %e, "response is not an OpenAI models list");
-                        return Some(build_server(label, base_url, AiServerKind::Generic, Vec::new()));
+                        // Exo exposes /v1/models but the response shape can include extra
+                        // fields; if we cannot parse it, still treat the endpoint as online
+                        // and try the Exo /state endpoint for cluster confirmation.
+                        let cluster_nodes = probe_exo_state(client, base_url).await;
+                        let kind = if cluster_nodes.is_some() {
+                            AiServerKind::Exo
+                        } else {
+                            AiServerKind::Generic
+                        };
+                        return Some(build_server(label, base_url, kind, Vec::new(), cluster_nodes));
                     }
                 };
 
                 let models = extract_model_ids(&body);
-                let kind = infer_kind(base_url, &models);
-                return Some(build_server(label, base_url, kind, models));
+                let mut kind = infer_kind(base_url, &models);
+                let cluster_nodes = if kind == AiServerKind::Exo || base_url.contains(":52415") {
+                    probe_exo_state(client, base_url).await
+                } else {
+                    None
+                };
+                if kind == AiServerKind::Generic && cluster_nodes.is_some() {
+                    kind = AiServerKind::Exo;
+                }
+                return Some(build_server(label, base_url, kind, models, cluster_nodes));
             }
             Ok(response) => {
                 debug!(url = %url, status = %response.status(), "AI server probe returned non-success");
@@ -233,6 +251,13 @@ async fn probe_endpoint(client: &Client, base_url: &str, label: &str) -> Option<
             }
         }
     }
+
+    // Exo-specific fallback: a master node may expose /state even when no model
+    // instance is currently loaded, so /v1/models can be empty or missing.
+    if let Some(nodes) = probe_exo_state(client, base_url).await {
+        return Some(build_server(label, base_url, AiServerKind::Exo, Vec::new(), Some(nodes)));
+    }
+
     None
 }
 
@@ -257,7 +282,7 @@ async fn probe_ollama_tags(client: &Client, base_url: &str, label: &str) -> Opti
             if models.is_empty() {
                 return None;
             }
-            Some(build_server(label, base_url, AiServerKind::Ollama, models))
+            Some(build_server(label, base_url, AiServerKind::Ollama, models, None))
         }
         Ok(response) => {
             debug!(url = %url, status = %response.status(), "Ollama probe returned non-success");
@@ -266,6 +291,73 @@ async fn probe_ollama_tags(client: &Client, base_url: &str, label: &str) -> Opti
         Err(e) => {
             debug!(url = %url, error = %format_error_chain(&e), "Ollama probe failed");
             None
+        }
+    }
+}
+
+/// Probe an Exo Labs cluster master for its `/state` endpoint and extract the
+/// IDs of nodes participating in the cluster.  The response shape is treated
+/// as opaque JSON: we look for node keys under `topology.nodes`,
+/// `node_identities`, `last_seen`, and a few other known mappings.
+async fn probe_exo_state(client: &Client, base_url: &str) -> Option<Vec<String>> {
+    let url = format!("{}/state", base_url.trim_end_matches('/'));
+    let response = client.get(&url).send().await.ok()?;
+    if !response.status().is_success() {
+        debug!(url = %url, status = %response.status(), "exo /state probe returned non-success");
+        return None;
+    }
+    let text = response.text().await.ok()?;
+    let state: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let mut nodes: Vec<String> = extract_node_ids(&state);
+    nodes.sort();
+    nodes.dedup();
+    if nodes.is_empty() {
+        None
+    } else {
+        debug!(url = %url, node_count = nodes.len(), "extracted exo cluster nodes");
+        Some(nodes)
+    }
+}
+
+fn extract_node_ids(state: &serde_json::Value) -> Vec<String> {
+    let mut ids = Vec::new();
+
+    // topology.nodes is the canonical location in current exo releases.
+    if let Some(topology) = state.get("topology").or_else(|| state.get("Topology")) {
+        if let Some(nodes) = topology.get("nodes").or_else(|| topology.get("Nodes")) {
+            collect_node_keys(nodes, &mut ids);
+        }
+    }
+
+    // Fallback: per-node state mappings keyed by node id.
+    for key in ["node_identities", "node_memory", "node_disk", "node_system", "node_network", "last_seen"] {
+        if let Some(map) = state.get(key).or_else(|| state.get(to_camel(key))) {
+            collect_node_keys(map, &mut ids);
+        }
+    }
+
+    ids
+}
+
+fn to_camel(s: &str) -> String {
+    let mut parts = s.split('_');
+    let first = parts.next().unwrap_or("");
+    let rest: String = parts.map(|p| {
+        let mut chars = p.chars();
+        match chars.next() {
+            Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            None => String::new(),
+        }
+    }).collect();
+    format!("{}{}", first, rest)
+}
+
+fn collect_node_keys(value: &serde_json::Value, out: &mut Vec<String>) {
+    if let Some(obj) = value.as_object() {
+        for key in obj.keys() {
+            if !key.is_empty() {
+                out.push(key.clone());
+            }
         }
     }
 }
@@ -330,6 +422,9 @@ fn infer_kind(base_url: &str, models: &[String]) -> AiServerKind {
     if contains_any(&lower, &["kobold", "koboldcpp"]) {
         return AiServerKind::KoboldCpp;
     }
+    if contains_any(&lower, &["exo"]) || lower.contains(":52415") {
+        return AiServerKind::Exo;
+    }
     AiServerKind::Generic
 }
 
@@ -337,7 +432,13 @@ fn contains_any(haystack: &str, needles: &[&str]) -> bool {
     needles.iter().any(|n| haystack.contains(n))
 }
 
-fn build_server(display: &str, base_url: &str, kind: AiServerKind, models: Vec<String>) -> AiServerMetrics {
+fn build_server(
+    display: &str,
+    base_url: &str,
+    kind: AiServerKind,
+    models: Vec<String>,
+    cluster_nodes: Option<Vec<String>>,
+) -> AiServerMetrics {
     let name = display
         .trim_start_matches("http://")
         .trim_start_matches("https://")
@@ -356,6 +457,7 @@ fn build_server(display: &str, base_url: &str, kind: AiServerKind, models: Vec<S
         status: Default::default(),
         latency_ms: None,
         models,
+        cluster_nodes,
         last_error: None,
         cpu_percent: 0.0,
         memory_bytes: 0,
@@ -489,5 +591,47 @@ mod tests {
     fn detects_private_network_address() {
         let net = network_address(Ipv4Addr::new(192, 168, 5, 10), 24);
         assert_eq!(net, Ipv4Addr::new(192, 168, 5, 0));
+    }
+
+    #[test]
+    fn infers_exo_from_default_port() {
+        let kind = infer_kind("http://localhost:52415", &[]);
+        assert_eq!(kind, AiServerKind::Exo);
+    }
+
+    #[test]
+    fn infers_exo_from_url_hint() {
+        let kind = infer_kind("http://exo-master.local:8000", &[]);
+        assert_eq!(kind, AiServerKind::Exo);
+    }
+
+    #[test]
+    fn extracts_exo_node_ids_from_topology() {
+        let json = r#"{
+            "topology": {
+                "nodes": {
+                    "node-aaa": {"memory": 32000},
+                    "node-bbb": {"memory": 64000}
+                }
+            }
+        }"#;
+        let state: serde_json::Value = serde_json::from_str(json).unwrap();
+        let nodes = extract_node_ids(&state);
+        assert_eq!(nodes, vec!["node-aaa".to_string(), "node-bbb".to_string()]);
+    }
+
+    #[test]
+    fn extracts_exo_node_ids_from_node_mappings() {
+        let json = r#"{
+            "node_identities": {"peer-1": {}, "peer-2": {}},
+            "last_seen": {"peer-3": "2026-08-16T12:00:00", "peer-4": {}}
+        }"#;
+        let state: serde_json::Value = serde_json::from_str(json).unwrap();
+        let nodes = extract_node_ids(&state);
+        assert_eq!(nodes.len(), 4);
+        assert!(nodes.contains(&"peer-1".to_string()));
+        assert!(nodes.contains(&"peer-2".to_string()));
+        assert!(nodes.contains(&"peer-3".to_string()));
+        assert!(nodes.contains(&"peer-4".to_string()));
     }
 }

@@ -202,6 +202,7 @@ pub struct AiServerCard {
     pub latency_ms: Option<u64>,
     pub last_error: Option<String>,
     pub is_remote: bool,
+    pub cluster_nodes: Option<Vec<String>>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -377,6 +378,7 @@ impl AiServerCard {
             latency_ms: s.latency_ms,
             last_error: s.last_error.clone(),
             is_remote: s.pid.is_none(),
+            cluster_nodes: s.cluster_nodes.clone(),
         }
     }
 }

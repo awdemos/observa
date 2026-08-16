@@ -2830,6 +2830,22 @@ table.data-table {
   color: var(--fg);
 }
 
+.ai-server-cluster {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--fg-muted);
+}
+
+.ai-server-cluster-label {
+  color: var(--fg-dim);
+  margin-right: 0.35rem;
+}
+
+.ai-server-cluster-count {
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
 /* Alert toasts */
 .toast-container {
   position: fixed;

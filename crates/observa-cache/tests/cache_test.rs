@@ -53,6 +53,7 @@ fn sample_metric() -> MetricSnapshot {
             status: Default::default(),
             latency_ms: None,
             models: Vec::new(),
+            cluster_nodes: None,
             last_error: None,
             cpu_percent: 5.0,
             memory_bytes: 100_000_000,

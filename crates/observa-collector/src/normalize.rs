@@ -338,6 +338,7 @@ fn detect_ai_servers(processes: &[ProcessMetrics]) -> Vec<AiServerMetrics> {
                 status: Default::default(),
                 latency_ms: None,
                 models: Vec::new(),
+                cluster_nodes: None,
                 last_error: None,
                 cpu_percent: p.cpu_percent,
                 memory_bytes: p.memory_bytes,

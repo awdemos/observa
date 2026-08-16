@@ -80,6 +80,7 @@ pub enum AiServerKind {
     TabbyApi,
     LmStudio,
     TextGenerationInference,
+    Exo,
     #[default]
     Generic,
 }
@@ -113,6 +114,8 @@ pub struct AiServerMetrics {
     pub latency_ms: Option<u64>,
     #[serde(default)]
     pub models: Vec<String>,
+    #[serde(default)]
+    pub cluster_nodes: Option<Vec<String>>,
     #[serde(default)]
     pub last_error: Option<String>,
     pub cpu_percent: f32,

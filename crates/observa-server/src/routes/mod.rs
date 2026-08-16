@@ -795,8 +795,12 @@ async fn build_ai_servers_context(state: &AppState) -> tera::Context {
         .into_iter()
         .map(StorageEventRow::from_log)
         .collect();
+    let online_count = servers.iter().filter(|s| s.status == "online").count();
+    let offline_count = servers.iter().filter(|s| s.status == "offline").count();
     ctx.insert("servers", &servers);
     ctx.insert("server_count", &servers.len());
+    ctx.insert("online_count", &online_count);
+    ctx.insert("offline_count", &offline_count);
     ctx.insert("ai_server_events", &events);
     ctx.insert("ai_server_event_count", &events.len());
     ctx

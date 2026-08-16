@@ -20,3 +20,7 @@ log_tail = true
 # endpoint = "http://192.168.1.10:8000/v1"
 # name = "lab-vllm"
 # kind = "vllm"
+# [[ai_server]]
+# endpoint = "http://localhost:52415/v1"
+# name = "local-exo-cluster"
+# kind = "exo"
