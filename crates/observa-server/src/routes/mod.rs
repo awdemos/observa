@@ -760,9 +760,36 @@ async fn build_network_context(state: &AppState) -> tera::Context {
 async fn build_ai_servers_context(state: &AppState) -> tera::Context {
     let mut ctx = tera::Context::new();
     let latest = degrade_on_error("latest_metric", state.store.latest_metric().await).await;
-    let servers: Vec<AiServerCard> = latest
+    let mut local: Vec<AiServerCard> = latest
         .map(|m| m.ai_servers.iter().map(AiServerCard::from_ai_server).collect())
         .unwrap_or_default();
+    let mut remote: Vec<AiServerCard> = state
+        .ai_servers
+        .read()
+        .await
+        .iter()
+        .map(AiServerCard::from_ai_server)
+        .collect();
+
+    let mut servers = Vec::with_capacity(local.len() + remote.len());
+    servers.append(&mut local);
+    servers.append(&mut remote);
+
+    servers.sort_by(|a, b| {
+        let status_order = |s: &str| match s {
+            "offline" => 0,
+            "unknown" => 1,
+            _ => 2,
+        };
+        let ord = status_order(&a.status.to_lowercase())
+            .cmp(&status_order(&b.status.to_lowercase()))
+            .reverse();
+        if ord != std::cmp::Ordering::Equal {
+            return ord;
+        }
+        a.name.to_lowercase().cmp(&b.name.to_lowercase())
+    });
+
     let events: Vec<StorageEventRow> = degrade_on_error("recent_logs", state.store.recent_logs(20).await)
         .await
         .into_iter()
