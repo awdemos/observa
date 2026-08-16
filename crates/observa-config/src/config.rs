@@ -28,6 +28,14 @@ pub fn default_database_url() -> String {
     format!("sqlite://{}", dir.join("observa.db").to_string_lossy())
 }
 
+/// Configuration for a single remote AI inference endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct AiServerConfig {
+    pub endpoint: String,
+    pub name: Option<String>,
+    pub kind: Option<String>,
+}
+
 /// Internal struct matching the shape of the configuration file and env vars.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RawConfig {
@@ -49,7 +57,9 @@ struct RawConfig {
     notifications_webhook_url: Option<String>,
     log_page_size: Option<u64>,
     metric_history_minutes: Option<u64>,
-    ai_server_endpoints: Option<Vec<String>>,
+    ai_servers: Option<Vec<AiServerConfig>>,
+    ai_server_poll_interval_ms: Option<u64>,
+    ai_server_probe_timeout_ms: Option<u64>,
     ai_server_subnet_scan: Option<bool>,
     dashboard_token: Option<String>,
 }
@@ -76,7 +86,9 @@ impl Default for RawConfig {
             notifications_webhook_url: default.notifications_webhook_url,
             log_page_size: Some(default.log_page_size),
             metric_history_minutes: Some(default.metric_history_minutes),
-            ai_server_endpoints: Some(default.ai_server_endpoints.clone()),
+            ai_servers: Some(default.ai_servers.clone()),
+            ai_server_poll_interval_ms: Some(default.ai_server_poll_interval_ms),
+            ai_server_probe_timeout_ms: Some(default.ai_server_probe_timeout_ms),
             ai_server_subnet_scan: Some(default.ai_server_subnet_scan),
             dashboard_token: default.dashboard_token.clone(),
         }
@@ -140,9 +152,15 @@ impl RawConfig {
             metric_history_minutes: self
                 .metric_history_minutes
                 .unwrap_or_else(|| Config::default().metric_history_minutes),
-            ai_server_endpoints: self
-                .ai_server_endpoints
-                .unwrap_or_else(|| Config::default().ai_server_endpoints.clone()),
+            ai_servers: self
+                .ai_servers
+                .unwrap_or_else(|| Config::default().ai_servers.clone()),
+            ai_server_poll_interval_ms: self
+                .ai_server_poll_interval_ms
+                .unwrap_or_else(|| Config::default().ai_server_poll_interval_ms),
+            ai_server_probe_timeout_ms: self
+                .ai_server_probe_timeout_ms
+                .unwrap_or_else(|| Config::default().ai_server_probe_timeout_ms),
             ai_server_subnet_scan: self
                 .ai_server_subnet_scan
                 .unwrap_or(Config::default().ai_server_subnet_scan),
@@ -170,7 +188,9 @@ pub struct Config {
     pub notifications_webhook_url: Option<String>,
     pub log_page_size: u64,
     pub metric_history_minutes: u64,
-    pub ai_server_endpoints: Vec<String>,
+    pub ai_servers: Vec<AiServerConfig>,
+    pub ai_server_poll_interval_ms: u64,
+    pub ai_server_probe_timeout_ms: u64,
     pub ai_server_subnet_scan: bool,
     pub dashboard_token: Option<String>,
 }
@@ -195,32 +215,26 @@ impl Default for Config {
             notifications_webhook_url: None,
             log_page_size: 50,
             metric_history_minutes: 60,
-            ai_server_endpoints: default_ai_server_endpoints(),
+            ai_servers: Vec::new(),
+            ai_server_poll_interval_ms: 10_000,
+            ai_server_probe_timeout_ms: 5_000,
             ai_server_subnet_scan: false,
             dashboard_token: None,
         }
     }
 }
 
-fn default_ai_server_endpoints() -> Vec<String> {
-    vec![
-        // Common Docker Compose service names for inference engines.
-        String::from("llama-server:8080"),
-        String::from("ollama:11434"),
-        String::from("vllm:8000"),
-        String::from("triton:8000"),
-        String::from("sglang:30000"),
-        String::from("tabbyapi:5000"),
-        String::from("lmstudio:1234"),
-        // Host loopback aliases when running outside a container or in host network mode.
-        String::from("127.0.0.1:8080"),
-        String::from("127.0.0.1:18080"),
-        String::from("127.0.0.1:11434"),
-        String::from("127.0.0.1:8000"),
-        String::from("127.0.0.1:5000"),
-        String::from("127.0.0.1:30000"),
-        String::from("127.0.0.1:1234"),
-    ]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ai_server_config_defaults_to_empty() {
+        let config = Config::default();
+        assert!(config.ai_servers.is_empty());
+        assert_eq!(config.ai_server_poll_interval_ms, 10_000);
+        assert_eq!(config.ai_server_probe_timeout_ms, 5_000);
+    }
 }
 
 impl Config {

@@ -91,7 +91,7 @@ async fn main() {
         bus: bus.clone(),
         shutdown: shutdown_rx.clone(),
         compression_enabled: config.compression_enabled,
-        ai_server_endpoints: config.ai_server_endpoints.clone(),
+        ai_server_endpoints: config.ai_servers.iter().map(|s| s.endpoint.clone()).collect(),
         ai_server_subnet_scan: config.ai_server_subnet_scan,
     });
 
