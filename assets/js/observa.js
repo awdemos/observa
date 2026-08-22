@@ -196,8 +196,6 @@
       });
     }
 
-    wireSystemPromptControls();
-
     document.addEventListener('click', (evt) => {
       if (!panel.hidden && !panel.contains(evt.target) && !toggle.contains(evt.target)) {
         panel.hidden = true;
@@ -847,41 +845,36 @@
     const urlParams = getChatUrlParams();
     const stored = loadWidgetSession();
     let sessionId = urlParams.sessionId || stored.sessionId || panel.dataset.session || null;
-    let ownerToken = urlParams.ownerToken || stored.ownerToken || panel.dataset.ownerToken || null;
 
-    if (urlParams.sessionId && urlParams.ownerToken) {
+    if (urlParams.sessionId) {
       // URL is authoritative; keep localStorage in sync.
-      saveWidgetSession(urlParams.sessionId, urlParams.ownerToken);
-    } else if (stored.sessionId && stored.ownerToken) {
+      saveWidgetSession(urlParams.sessionId);
+    } else if (stored.sessionId) {
       // We have a persisted session but the URL doesn't; redirect so the server
       // renders the full history for this conversation.
-      window.location.href = buildChatUrl(stored.sessionId, stored.ownerToken);
+      window.location.href = buildChatUrl(stored.sessionId);
       return;
-    } else if (sessionId && ownerToken) {
+    } else if (sessionId) {
       // Server rendered a fresh session; persist it and update the URL.
-      saveWidgetSession(sessionId, ownerToken);
-      updateChatUrl(sessionId, ownerToken);
+      saveWidgetSession(sessionId);
+      updateChatUrl(sessionId);
     } else {
       // No session anywhere; create one and reload with it in the URL.
       try {
-        ({ sessionId, ownerToken } = await ensureWidgetSession());
+        ({ sessionId } = await ensureWidgetSession());
       } catch (err) {
         return;
       }
-      window.location.href = buildChatUrl(sessionId, ownerToken);
+      window.location.href = buildChatUrl(sessionId);
       return;
     }
 
     panel.dataset.session = sessionId;
-    panel.dataset.ownerToken = ownerToken;
     const form = el('chat-form');
     if (form) {
       form.dataset.session = sessionId;
-      form.dataset.ownerToken = ownerToken;
       const sessionInput = form.querySelector('input[name="session_id"]');
-      const ownerInput = form.querySelector('input[name="owner_token"]');
       if (sessionInput) sessionInput.value = sessionId;
-      if (ownerInput) ownerInput.value = ownerToken;
     }
 
     const input = el('chat-input');
@@ -890,29 +883,27 @@
 
     if (!form || !input || !box) return;
 
-    bindChatSubmit(form, input, box, spinner, sessionId, ownerToken);
+    bindChatSubmit(form, input, box, spinner, sessionId);
   }
 
   function getChatUrlParams() {
     const params = new URLSearchParams(window.location.search);
     return {
       sessionId: params.get('session_id') || null,
-      ownerToken: params.get('owner_token') || null,
     };
   }
 
-  function buildChatUrl(sessionId, ownerToken) {
+  function buildChatUrl(sessionId) {
     const url = new URL('/chat', window.location.origin);
     url.searchParams.set('session_id', sessionId);
-    url.searchParams.set('owner_token', ownerToken);
     return url.toString();
   }
 
-  function updateChatUrl(sessionId, ownerToken) {
+  function updateChatUrl(sessionId) {
     try {
       const url = new URL(window.location.href);
       url.searchParams.set('session_id', sessionId);
-      url.searchParams.set('owner_token', ownerToken);
+      url.searchParams.delete('owner_token');
       window.history.replaceState({}, '', url.toString());
     } catch (_) {
       /* no-op */
@@ -923,14 +914,11 @@
     const widget = el('chat-widget');
     if (!widget) return;
 
-    let { sessionId, ownerToken } = loadWidgetSession();
+    let { sessionId } = loadWidgetSession();
     widget.dataset.session = sessionId || '';
-    widget.dataset.ownerToken = ownerToken || '';
     const sessionInput = widget.querySelector('input[name="session_id"]');
     if (sessionInput) sessionInput.value = sessionId || '';
-    const ownerInput = widget.querySelector('input[name="owner_token"]');
-    if (ownerInput) ownerInput.value = ownerToken || '';
-    if (sessionId && ownerToken) saveWidgetSession(sessionId, ownerToken);
+    if (sessionId) saveWidgetSession(sessionId);
 
     const toggle = el('chat-widget-toggle');
     const close = el('chat-widget-close');
@@ -976,19 +964,19 @@
       }
     });
 
-    bindChatSubmit(form, input, box, spinner, sessionId, ownerToken);
-    if (sessionId && ownerToken) {
-      loadWidgetMessagesFromServer(sessionId, ownerToken, box);
+    bindChatSubmit(form, input, box, spinner, sessionId);
+    if (sessionId) {
+      loadWidgetMessagesFromServer(sessionId, box);
     } else {
       restoreChatHistory(sessionId, box);
     }
   }
 
-  async function loadWidgetMessagesFromServer(sessionId, ownerToken, box) {
-    if (!sessionId || !ownerToken || !box) return;
+  async function loadWidgetMessagesFromServer(sessionId, box) {
+    if (!sessionId || !box) return;
     try {
-      const url = `/partials/chat?session_id=${encodeURIComponent(sessionId)}&owner_token=${encodeURIComponent(ownerToken)}`;
-      const response = await fetch(url);
+      const url = `/partials/chat?session_id=${encodeURIComponent(sessionId)}`;
+      const response = await fetch(url, { credentials: 'same-origin' });
       if (response.ok) {
         const html = await response.text();
         box.innerHTML = html;
@@ -1027,17 +1015,19 @@
       const stored = localStorage.getItem(WIDGET_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && parsed.sessionId && parsed.ownerToken) return parsed;
+        // Legacy entries may contain an ownerToken; ignore it now that the
+        // server stores the token in an HttpOnly cookie.
+        if (parsed && parsed.sessionId) return { sessionId: parsed.sessionId };
       }
     } catch (_) {
       /* no-op */
     }
-    return { sessionId: null, ownerToken: null };
+    return { sessionId: null };
   }
 
-  function saveWidgetSession(sessionId, ownerToken) {
+  function saveWidgetSession(sessionId) {
     try {
-      localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify({ sessionId, ownerToken }));
+      localStorage.setItem(WIDGET_STORAGE_KEY, JSON.stringify({ sessionId }));
     } catch (_) {
       /* no-op */
     }
@@ -1060,41 +1050,36 @@
   }
 
   async function ensureWidgetSession() {
-    let { sessionId, ownerToken } = loadWidgetSession();
-    if (sessionId && ownerToken) return { sessionId, ownerToken };
+    let { sessionId } = loadWidgetSession();
+    if (sessionId) return { sessionId };
     try {
       const response = await fetch('/api/chat/session', { method: 'POST' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       sessionId = data.session_id;
-      ownerToken = data.owner_token;
-      saveWidgetSession(sessionId, ownerToken);
+      saveWidgetSession(sessionId);
       const widget = el('chat-widget');
       if (widget) {
         widget.dataset.session = sessionId;
-        widget.dataset.ownerToken = ownerToken;
       }
       const sessionInput = widget && widget.querySelector('input[name="session_id"]');
       if (sessionInput) sessionInput.value = sessionId;
-      const ownerInput = widget && widget.querySelector('input[name="owner_token"]');
-      if (ownerInput) ownerInput.value = ownerToken;
     } catch (err) {
       throw new Error(`failed to create session: ${err.message || 'unknown'}`);
     }
-    return { sessionId, ownerToken };
+    return { sessionId };
   }
 
-  function bindChatSubmit(form, input, box, spinner, initialSessionId, initialOwnerToken) {
+  function bindChatSubmit(form, input, box, spinner, initialSessionId) {
     form.addEventListener('submit', async (evt) => {
       evt.preventDefault();
       const text = input.value.trim();
       if (!text) return;
 
       let sessionId = initialSessionId;
-      let ownerToken = initialOwnerToken;
-      if (!sessionId || !ownerToken) {
+      if (!sessionId) {
         try {
-          ({ sessionId, ownerToken } = await ensureWidgetSession());
+          ({ sessionId } = await ensureWidgetSession());
         } catch (err) {
           appendChatBubble('assistant', `Error: ${err.message || 'failed to create session'}`);
           return;
@@ -1113,7 +1098,8 @@
         const response = await fetch('/api/chat/ask-html', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, owner_token: ownerToken, message: text, system_prompt: getSystemPrompt() }),
+          credentials: 'same-origin',
+          body: JSON.stringify({ session_id: sessionId, message: text }),
         });
         const html = await response.text();
         if (response.ok) {
@@ -1415,55 +1401,10 @@
     init().catch((err) => console.warn('Observa init failed', err));
   }
 
-  const SYSTEM_PROMPT_PRESETS = {
-    default: 'You are Observa, a terse system observability assistant. Answer in one or two sentences using the provided metrics and logs. Do not show your thinking process, chain-of-thought, or any internal analysis. Only output the final answer.',
-    detailed: 'You are Observa, a system observability assistant. Use the provided metrics and logs to give a helpful, moderately detailed answer. Explain your reasoning briefly, then give a clear recommendation or summary. Keep answers under four sentences when possible.',
-    concise: 'You are Observa. Reply with a single sentence. No preamble, no reasoning, no markdown.',
-    pirate: 'Ahoy! Ye be Observa, a swashbucklin\' system observability assistant. Answer like a pirate captain readin\' the ship\'s log: use nautical words, call metrics "treasures" and logs "scrolls," and end with a hearty "Arrr!" Keep it to one or two sentences.',
-  };
-
-  function getSystemPrompt() {
-    const prefs = loadPreferences();
-    const raw = prefs.systemPrompt || '';
-    if (raw.length > 4000) return raw.slice(0, 4000);
-    return raw;
-  }
-
-  function updateSystemPromptCounter() {
-    const countEl = document.getElementById('system-prompt-count');
-    const textarea = document.getElementById('pref-system-prompt');
-    if (!countEl || !textarea) return;
-    countEl.textContent = `${textarea.value.length}/4000`;
-  }
-
-  function wireSystemPromptControls() {
-    const textarea = document.getElementById('pref-system-prompt');
-    if (!textarea) return;
-    textarea.value = getSystemPrompt();
-    updateSystemPromptCounter();
-    textarea.addEventListener('input', () => {
-      const trimmed = textarea.value.slice(0, 4000);
-      if (textarea.value.length > 4000) textarea.value = trimmed;
-      savePreferences({ systemPrompt: trimmed });
-      updateSystemPromptCounter();
-    });
-
-    document.querySelectorAll('.system-prompt-presets .preset-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const key = btn.dataset.preset;
-        const value = SYSTEM_PROMPT_PRESETS[key] || '';
-        textarea.value = value;
-        savePreferences({ systemPrompt: value });
-        updateSystemPromptCounter();
-      });
-    });
-  }
-
   window.ObservaPreferences = {
     get autoRotate() { return getAutoRotateEnabled() && !isReducedMotionActive(); },
     get autoRotateSpeed() { return getAutoRotateSpeed(); },
     get reducedMotion() { return isReducedMotionActive(); },
-    get systemPrompt() { return getSystemPrompt(); },
   };
 
   wirePreferencesPanel();

@@ -51,6 +51,7 @@ struct RawConfig {
     metric_history_minutes: Option<u64>,
     ai_server_endpoints: Option<Vec<String>>,
     ai_server_subnet_scan: Option<bool>,
+    expose_ports_page: Option<bool>,
 }
 
 impl Default for RawConfig {
@@ -77,6 +78,7 @@ impl Default for RawConfig {
             metric_history_minutes: Some(default.metric_history_minutes),
             ai_server_endpoints: Some(default.ai_server_endpoints.clone()),
             ai_server_subnet_scan: Some(default.ai_server_subnet_scan),
+            expose_ports_page: Some(default.expose_ports_page),
         }
     }
 }
@@ -144,6 +146,9 @@ impl RawConfig {
             ai_server_subnet_scan: self
                 .ai_server_subnet_scan
                 .unwrap_or(Config::default().ai_server_subnet_scan),
+            expose_ports_page: self
+                .expose_ports_page
+                .unwrap_or(Config::default().expose_ports_page),
         })
     }
 }
@@ -169,6 +174,7 @@ pub struct Config {
     pub metric_history_minutes: u64,
     pub ai_server_endpoints: Vec<String>,
     pub ai_server_subnet_scan: bool,
+    pub expose_ports_page: bool,
 }
 
 impl Default for Config {
@@ -193,6 +199,7 @@ impl Default for Config {
             metric_history_minutes: 60,
             ai_server_endpoints: default_ai_server_endpoints(),
             ai_server_subnet_scan: false,
+            expose_ports_page: false,
         }
     }
 }

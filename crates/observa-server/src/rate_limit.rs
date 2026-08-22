@@ -45,6 +45,11 @@ pub const API_READ_RATE_LIMIT: RateLimitConfig = RateLimitConfig {
     window: Duration::from_secs(60),
 };
 
+pub const SSE_RATE_LIMIT: RateLimitConfig = RateLimitConfig {
+    max: 30,
+    window: Duration::from_secs(60),
+};
+
 #[derive(Debug, serde::Serialize)]
 pub struct RateLimitError {
     pub error: String,

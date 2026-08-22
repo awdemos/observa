@@ -7,6 +7,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use tower_cookies::{CookieManagerLayer, Cookies};
 use tower_http::services::ServeDir;
 use uuid::Uuid;
 
@@ -14,6 +15,7 @@ use observa_bus::sse_stream;
 use observa_shared::severity_class;
 
 use crate::api::api_routes;
+use crate::chat::{owner_token_from_request, set_owner_cookie};
 use crate::paths::workspace_root;
 use crate::rate_limit::{rate_limit_check, ClientIp, HTML_RATE_LIMIT};
 use crate::routes::params::{
@@ -55,6 +57,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/partials/chat", get(partial_chat))
         .nest("/api", api_routes(state.clone()))
         .nest_service("/assets", get_service(ServeDir::new(assets_dir())))
+        .layer(CookieManagerLayer::new())
         .with_state(state)
 }
 
@@ -67,19 +70,31 @@ fn render(state: &AppState, template: &str, ctx: &tera::Context) -> impl IntoRes
     match state.tera.render(template, ctx) {
         Ok(html) => Html(html).into_response(),
         Err(e) => {
-            let mut chain = String::new();
-            chain.push_str(&format!("{e}"));
-            let mut source = e.source();
-            while let Some(s) = source {
-                chain.push_str(&format!("\n  caused by: {s}"));
-                source = s.source();
+            #[cfg(debug_assertions)]
+            {
+                let mut chain = String::new();
+                chain.push_str(&format!("{e}"));
+                let mut source = e.source();
+                while let Some(s) = source {
+                    chain.push_str(&format!("\n  caused by: {s}"));
+                    source = s.source();
+                }
+                tracing::error!(error = %chain, template, "failed to render template");
+                return (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("failed to render {template}: {chain}"),
+                )
+                    .into_response();
             }
-            tracing::error!(error = %chain, template, "failed to render template");
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to render {template}: {chain}"),
-            )
-                .into_response()
+            #[cfg(not(debug_assertions))]
+            {
+                tracing::error!(error = %e, template, "failed to render template");
+                return (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+                    .into_response();
+            }
         }
     }
 }
@@ -249,16 +264,17 @@ async fn chat_page(
     OriginalUri(uri): OriginalUri,
     ClientIp(addr): ClientIp,
     Query(query): Query<ChatQuery>,
+    cookies: Cookies,
 ) -> Response {
     if let Err(resp) = rate_limit_check(&state, "chat_page", addr, HTML_RATE_LIMIT).await {
         return resp.into_response();
     }
-    let owner_token = query.owner_token.as_deref().unwrap_or("");
-    let mut ctx = build_chat_context(&state, query.session_id, owner_token).await;
-    // build_chat_context inserts owner_token only when it creates a new session;
-    // make sure the queried token is available to the template as well.
-    if !ctx.contains_key("owner_token") {
-        ctx.insert("owner_token", &query.owner_token.unwrap_or_default());
+    let owner_token = query
+        .session_id
+        .and_then(|id| owner_token_from_request(&cookies, id, query.owner_token.as_deref()));
+    let (mut ctx, new_session) = build_chat_context(&state, query.session_id, owner_token.as_deref()).await;
+    if let Some((session_id, token)) = new_session {
+        set_owner_cookie(&cookies, session_id, &token);
     }
     insert_path(&mut ctx, uri.path());
     render(&state, "chat.html", &ctx).into_response()
@@ -283,9 +299,6 @@ async fn build_about_context(state: &AppState) -> tera::Context {
     ctx.insert("sample_interval_ms", &state.config.sample_interval_ms);
     ctx.insert("log_source", &format!("{:?}", state.config.log_source));
     ctx.insert("retention_days", &state.config.retention_days);
-    ctx.insert("compression_enabled", &state.config.compression_enabled);
-    ctx.insert("database_enabled", &state.config.database_url.is_some());
-    ctx.insert("redis_enabled", &state.config.redis_url.is_some());
     ctx
 }
 
@@ -298,12 +311,7 @@ async fn build_status_context(state: &AppState) -> tera::Context {
     ctx.insert("stored_metrics", &stored_metrics);
     ctx.insert("stored_logs", &stored_logs);
     ctx.insert("retention_days", &state.config.retention_days);
-    ctx.insert("llm_ok", &state.llm.is_some());
-    ctx.insert("compression_enabled", &state.config.compression_enabled);
     ctx.insert("sample_interval_ms", &state.config.sample_interval_ms);
-    ctx.insert("log_source", &format!("{:?}", state.config.log_source));
-    ctx.insert("database_enabled", &state.config.database_url.is_some());
-    ctx.insert("redis_enabled", &state.config.redis_url.is_some());
     ctx.insert("version", env!("CARGO_PKG_VERSION"));
     let last_snapshot = degrade_on_error("latest_metric", state.store.latest_metric().await).await;
     ctx.insert("last_snapshot_at", &last_snapshot.map(|m| m.ts.to_rfc3339()).unwrap_or_default());
@@ -399,12 +407,18 @@ async fn partial_chat(
     OriginalUri(uri): OriginalUri,
     Query(query): Query<ChatQuery>,
     ClientIp(addr): ClientIp,
+    cookies: Cookies,
 ) -> Response {
     if let Err(resp) = rate_limit_check(&state, "partial_chat", addr, HTML_RATE_LIMIT).await {
         return resp.into_response();
     }
-    let owner_token = query.owner_token.as_deref().unwrap_or("");
-    let mut ctx = build_chat_context(&state, query.session_id, owner_token).await;
+    let owner_token = query
+        .session_id
+        .and_then(|id| owner_token_from_request(&cookies, id, query.owner_token.as_deref()));
+    let (mut ctx, new_session) = build_chat_context(&state, query.session_id, owner_token.as_deref()).await;
+    if let Some((session_id, token)) = new_session {
+        set_owner_cookie(&cookies, session_id, &token);
+    }
     insert_path(&mut ctx, uri.path());
     render(&state, "partials/chat_messages.html", &ctx).into_response()
 }
@@ -468,41 +482,40 @@ async fn build_logs_context(state: &AppState, filter: &LogFilter) -> tera::Conte
     ctx
 }
 
+/// Build the chat-page context. Returns the context plus `(session_id, owner_token)`
+/// when a new session had to be created (so the caller can set the HttpOnly cookie).
 async fn build_chat_context(
     state: &AppState,
     session_id: Option<Uuid>,
-    owner_token: &str,
-) -> tera::Context {
+    owner_token: Option<&str>,
+) -> (tera::Context, Option<(Uuid, String)>) {
     let mut ctx = tera::Context::new();
-    let session_id = match session_id {
+    let empty_token = String::new();
+    let owner_token = owner_token.unwrap_or(empty_token.as_str());
+
+    let (session_id, new_token) = match session_id {
         Some(id) => match state.chat_store.verify_session_owner(id, owner_token).await {
-            Ok(true) => id,
+            Ok(true) => (id, None),
             Ok(false) => {
                 tracing::warn!(%id, "chat owner token mismatch; creating new session");
                 match state.chat_store.create_session().await {
-                    Ok((new_id, token)) => {
-                        ctx.insert("owner_token", &token);
-                        new_id
-                    }
+                    Ok((new_id, token)) => (new_id, Some((new_id, token))),
                     Err(error) => {
                         tracing::warn!(%error, "failed to create chat session");
-                        return ctx;
+                        return (ctx, None);
                     }
                 }
             }
             Err(error) => {
                 tracing::warn!(%error, %id, "failed to verify chat session owner");
-                return ctx;
+                return (ctx, None);
             }
         },
         None => match state.chat_store.create_session().await {
-            Ok((id, token)) => {
-                ctx.insert("owner_token", &token);
-                id
-            }
+            Ok((id, token)) => (id, Some((id, token))),
             Err(error) => {
                 tracing::warn!(%error, "failed to create chat session");
-                return ctx;
+                return (ctx, None);
             }
         },
     };
@@ -513,7 +526,7 @@ async fn build_chat_context(
         .unwrap_or_default();
     ctx.insert("session_id", &session_id.to_string());
     ctx.insert("messages", &messages);
-    ctx
+    (ctx, new_token)
 }
 
 async fn build_security_context(state: &AppState, filter: &SecurityFilter) -> tera::Context {
@@ -554,7 +567,11 @@ async fn build_network_context(state: &AppState) -> tera::Context {
         .as_ref()
         .map(|m| NetworkCombined::from_networks(&m.networks))
         .unwrap_or_else(|| NetworkCombined::from_networks(&[]));
-    let ports: Vec<crate::ports::PortRow> = crate::ports::open_ports().await.unwrap_or_default();
+    let ports: Vec<crate::ports::PortRow> = if state.config.expose_ports_page {
+        crate::ports::open_ports().await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let traffic: Vec<NetworkTrafficRow> = degrade_on_error("recent_logs", state.store.recent_logs(20).await)
         .await
         .into_iter()
@@ -670,8 +687,14 @@ fn severity_counts(rows: &[impl SeverityLabel]) -> Vec<SeverityCount> {
     out
 }
 
-async fn events(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    sse_stream(&state.bus)
+async fn events(
+    State(state): State<Arc<AppState>>,
+    ClientIp(addr): ClientIp,
+) -> axum::response::Response {
+    if let Err(resp) = rate_limit_check(&state, "events", addr, crate::rate_limit::SSE_RATE_LIMIT).await {
+        return resp.into_response();
+    }
+    sse_stream(&state.bus).into_response()
 }
 
 #[cfg(test)]

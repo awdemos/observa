@@ -373,29 +373,133 @@
       this.ribbonGroup = new THREE.Group();
       this.scene.add(this.ribbonGroup);
 
+      // Dramatic sky dome with horizon glow
+      this.sky = this.buildSkyDome();
+      this.scene.add(this.sky);
+
+      // Reflective floor with glowing grid
+      this.floor = this.buildFloor();
+      this.scene.add(this.floor);
+
       this.cpuGeo = new THREE.BufferGeometry();
       this.memGeo = new THREE.BufferGeometry();
-      this.cpuMat = MaterialLib.liquidGlass(cssVar('--accent', '#00f0ff'), this.renderer);
-      this.memMat = MaterialLib.liquidGlass(cssVar('--accent-2', '#ff2a8b'), this.renderer);
+      this.cpuMat = this.ribbonMaterial(cssVar('--accent', '#00f0ff'));
+      this.memMat = this.ribbonMaterial(cssVar('--accent-2', '#ff2a8b'));
 
       this.cpuMesh = new THREE.Mesh(this.cpuGeo, this.cpuMat);
       this.memMesh = new THREE.Mesh(this.memGeo, this.memMat);
       this.ribbonGroup.add(this.cpuMesh, this.memMesh);
 
-      this.floor = new THREE.GridHelper(9, 18, colorToThree(cssVar('--border', '#333')), colorToThree(cssVar('--border', '#333')));
-      this.floor.position.y = -0.05;
-      this.floor.material.opacity = 0.18;
-      this.floor.material.transparent = true;
-      this.scene.add(this.floor);
+      // Backlight glow planes behind each ribbon
+      this.cpuGlow = new THREE.Mesh(
+        new THREE.PlaneGeometry(8.4, 4.2),
+        MaterialLib.glow(cssVar('--accent', '#00f0ff'), 0.18)
+      );
+      this.cpuGlow.position.set(0, 2.1, -0.6);
+      this.memGlow = new THREE.Mesh(
+        new THREE.PlaneGeometry(8.4, 4.2),
+        MaterialLib.glow(cssVar('--accent-2', '#ff2a8b'), 0.18)
+      );
+      this.memGlow.position.set(0, 2.1, 1.0);
+      this.ribbonGroup.add(this.cpuGlow, this.memGlow);
 
-      this.camera.position.set(0, 2.6, 6.5);
-      this.controls.target.set(0, 1.1, 0);
-      this.controls.minPolarAngle = Math.PI * 0.22;
-      this.controls.maxPolarAngle = Math.PI * 0.52;
+      // More dramatic default view
+      this.camera.position.set(0, 3.2, 7.8);
+      this.controls.target.set(0, 1.6, 0);
+      this.controls.minPolarAngle = Math.PI * 0.18;
+      this.controls.maxPolarAngle = Math.PI * 0.58;
       this.controls.minDistance = 4;
-      this.controls.maxDistance = 10;
+      this.controls.maxDistance = 12;
 
       this.history = [];
+    }
+
+    buildSkyDome() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0.0, '#05070a');
+      grad.addColorStop(0.45, '#0a1525');
+      grad.addColorStop(0.75, '#101a33');
+      grad.addColorStop(1.0, '#1a1033');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 256);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const geo = new THREE.SphereGeometry(80, 32, 32);
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        side: THREE.BackSide,
+        fog: false,
+      });
+      const dome = new THREE.Mesh(geo, mat);
+      dome.rotation.x = Math.PI / 2;
+      return dome;
+    }
+
+    buildFloor() {
+      const group = new THREE.Group();
+
+      // Reflective base plane
+      const planeGeo = new THREE.PlaneGeometry(24, 24);
+      const planeMat = new THREE.MeshPhysicalMaterial({
+        color: 0x05070a,
+        metalness: 0.6,
+        roughness: 0.25,
+        clearcoat: 0.6,
+        clearcoatRoughness: 0.2,
+        transparent: true,
+        opacity: 0.9,
+      });
+      const plane = new THREE.Mesh(planeGeo, planeMat);
+      plane.rotation.x = -Math.PI / 2;
+      plane.position.y = -0.02;
+      group.add(plane);
+
+      // Glowing accent grid
+      const grid = new THREE.GridHelper(18, 36, colorToThree(cssVar('--accent', '#00f0ff')), colorToThree(cssVar('--border', '#333')));
+      grid.position.y = 0;
+      grid.material.opacity = 0.45;
+      grid.material.transparent = true;
+      grid.material.blending = THREE.AdditiveBlending;
+      group.add(grid);
+
+      // Horizon glow ring
+      const ringGeo = new THREE.RingGeometry(7, 8.5, 64);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: colorToThree(cssVar('--accent', '#00f0ff')),
+        transparent: true,
+        opacity: 0.08,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.01;
+      group.add(ring);
+
+      return group;
+    }
+
+    ribbonMaterial(hex) {
+      return new THREE.MeshPhysicalMaterial({
+        color: colorToThree(hex),
+        emissive: colorToThree(hex),
+        emissiveIntensity: 0.35,
+        metalness: 0.1,
+        roughness: 0.2,
+        transmission: 0.55,
+        ior: 1.5,
+        clearcoat: 1.0,
+        clearcoatRoughness: 0.1,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+        vertexColors: true,
+      });
     }
 
     setHistory(arr) {
@@ -415,18 +519,21 @@
       if (n < 2) return;
       const width = 8;
       const half = width / 2;
-      const depth = 0.8;
+      const depth = 0.85;
       const pos = [];
       const idx = [];
       const colors = [];
       const baseColor = colorToThree(color);
+      const topColor = new THREE.Color(0xffffff);
       for (let i = 0; i < n; i++) {
         const t = i / (n - 1);
         const x = -half + t * width;
-        const y = Math.max(0.02, (series[i] / 100) * 3.2);
+        const y = Math.max(0.04, (series[i] / 100) * 3.6);
         pos.push(x, y, zOffset, x, y, zOffset + depth);
-        const dim = baseColor.clone().multiplyScalar(0.6 + 0.4 * t);
-        colors.push(dim.r, dim.g, dim.b, dim.r, dim.g, dim.b);
+        // Brighter at the peaks, vivid base color in the body
+        const peak = Math.min(1, y / 2.5);
+        const c = baseColor.clone().lerp(topColor, peak * 0.55).multiplyScalar(0.85 + 0.35 * peak);
+        colors.push(c.r, c.g, c.b, c.r, c.g, c.b);
       }
       for (let i = 0; i < n - 1; i++) {
         const a = i * 2;
@@ -444,12 +551,14 @@
 
     rebuild() {
       if (this.history.length < 2) return;
-      this.cpuMat.vertexColors = true;
-      this.memMat.vertexColors = true;
       this.buildRibbon(this.history.map((h) => h.cpu || 0), this.cpuGeo, 0, cssVar('--accent', '#00f0ff'));
       this.buildRibbon(this.history.map((h) => h.mem || 0), this.memGeo, 1.6, cssVar('--accent-2', '#ff2a8b'));
     }
 
+    dispose() {
+      super.dispose();
+      if (this.sky && this.sky.material && this.sky.material.map) this.sky.material.map.dispose();
+    }
   }
 
   /* -------------------------------------------------------------------------- */

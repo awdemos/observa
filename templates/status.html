@@ -20,10 +20,6 @@
       <span class="status-value">#{{ heartbeat_seq }}</span>
     </div>
     <div class="status-item">
-      <span class="status-label">LLM configured</span>
-      <span class="status-value">{% if llm_ok %}Yes{% else %}No{% endif %}</span>
-    </div>
-    <div class="status-item">
       <span class="status-label">Version</span>
       <span class="status-value">{{ version }}</span>
     </div>
@@ -40,24 +36,8 @@
       <span class="status-value">{{ sample_interval_ms }} ms</span>
     </div>
     <div class="status-item">
-      <span class="status-label">Log source</span>
-      <span class="status-value">{{ log_source }}</span>
-    </div>
-    <div class="status-item">
-      <span class="status-label">SQLite persistence</span>
-      <span class="status-value">{% if database_enabled %}Enabled{% else %}Disabled{% endif %}</span>
-    </div>
-    <div class="status-item">
-      <span class="status-label">Redis cache</span>
-      <span class="status-value">{% if redis_enabled %}Enabled{% else %}Disabled{% endif %}</span>
-    </div>
-    <div class="status-item">
       <span class="status-label">Retention</span>
       <span class="status-value">{{ retention_days }} days</span>
-    </div>
-    <div class="status-item">
-      <span class="status-label">Compression</span>
-      <span class="status-value">{% if compression_enabled %}Enabled{% else %}Disabled{% endif %}</span>
     </div>
     <div class="status-item">
       <span class="status-label">Stored metrics</span>

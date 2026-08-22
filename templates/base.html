@@ -4,15 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Observa{% endblock title %}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/assets/vendor/fonts/fonts.css?v=1">
   <link rel="stylesheet" href="/assets/css/observa.css?v=8">
   <script src="/assets/vendor/three/three.min.js" defer></script>
   <script src="/assets/vendor/three/OrbitControls.js" defer></script>
   <script src="/assets/js/three-viz.js?v=6" defer></script>
-  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-ujb1lZYygJmzgSwoxRggbCHcjc0rB2XoQrxeTUQyRjrOnlCoYta87iKBWq3EsdM2" crossorigin="anonymous"></script>
+  <script src="/assets/vendor/htmx/htmx.min.js?v=1"></script>
   {% block head %}{% endblock head %}
 </head>
 <body>
@@ -79,19 +77,7 @@
               <option value="fast">Fast</option>
             </select>
           </label>
-          <div class="preference-row preference-row-stack">
-            <div class="preference-label-line">
-              <span>Assistant system prompt</span>
-              <span class="char-count" id="system-prompt-count">0/4000</span>
-            </div>
-            <textarea id="pref-system-prompt" rows="6" maxlength="4000" placeholder="Custom instructions for the assistant…"></textarea>
-            <div class="system-prompt-presets">
-              <button type="button" data-preset="default" class="preset-btn">Default</button>
-              <button type="button" data-preset="detailed" class="preset-btn">Detailed</button>
-              <button type="button" data-preset="concise" class="preset-btn">Concise</button>
-              <button type="button" data-preset="pirate" class="preset-btn">Pirate</button>
-            </div>
-          </div>
+
         </div>
       </div>
     </nav>
@@ -119,7 +105,6 @@
       </div>
       <form id="chat-widget-form" class="chat-widget-input-area">
         <input type="hidden" name="session_id" value="">
-        <input type="hidden" name="owner_token" value="">
         <input id="chat-widget-input" type="text" name="message" placeholder="Ask Observa…" aria-label="Message" required autocomplete="off">
         <button type="submit" aria-label="Send">→</button>
         <span id="chat-widget-spinner" class="spinner" aria-hidden="true">●</span>

@@ -133,11 +133,15 @@ impl DbCacheStore {
 #[derive(Clone)]
 pub struct DbChatStore {
     db: Option<Db>,
+    sessions: Arc<Mutex<std::collections::HashMap<Uuid, String>>>,
 }
 
 impl DbChatStore {
     pub fn new(db: Option<Db>) -> Self {
-        Self { db }
+        Self {
+            db,
+            sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        }
     }
 }
 
@@ -149,11 +153,19 @@ fn random_token() -> String {
 #[async_trait::async_trait]
 impl ChatStore for DbChatStore {
     async fn create_session(&self) -> Result<(Uuid, String), observa_shared::ObservaError> {
+        let id = Uuid::new_v4();
+        let owner_token = random_token();
         if let Some(db) = &self.db {
-            observa_db::chat::create_session(db).await
-        } else {
-            Ok((Uuid::new_v4(), random_token()))
+            // The database implementation generates its own id/token; ignore the
+            // local ones and use what it returns so the persisted record is the
+            // source of truth.
+            return observa_db::chat::create_session(db).await;
         }
+        self.sessions
+            .lock()
+            .await
+            .insert(id, owner_token.clone());
+        Ok((id, owner_token))
     }
 
     async fn ensure_session(
@@ -162,10 +174,13 @@ impl ChatStore for DbChatStore {
         owner_token: &str,
     ) -> Result<(), observa_shared::ObservaError> {
         if let Some(db) = &self.db {
-            observa_db::chat::ensure_session(db, session_id, owner_token).await
-        } else {
-            Ok(())
+            return observa_db::chat::ensure_session(db, session_id, owner_token).await;
         }
+        let mut sessions = self.sessions.lock().await;
+        sessions
+            .entry(session_id)
+            .or_insert_with(|| owner_token.to_string());
+        Ok(())
     }
 
     async fn verify_session_owner(
@@ -174,11 +189,13 @@ impl ChatStore for DbChatStore {
         owner_token: &str,
     ) -> Result<bool, observa_shared::ObservaError> {
         if let Some(db) = &self.db {
-            observa_db::chat::verify_session_owner(db, session_id, owner_token).await
-        } else {
-            // In-memory fallback trusts the single-process owner.
-            Ok(true)
+            return observa_db::chat::verify_session_owner(db, session_id, owner_token).await;
         }
+        let sessions = self.sessions.lock().await;
+        Ok(sessions
+            .get(&session_id)
+            .map(|stored| stored == owner_token)
+            .unwrap_or(false))
     }
 
     async fn messages_for_session(

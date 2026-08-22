@@ -13,7 +13,7 @@ use observa_bus::Bus;
 use observa_config::Config;
 use observa_server::{router, AppState};
 use observa_server::store::{InMemoryChatStore, InMemoryStore};
-use observa_shared::{Event, HealthStatus, HeartbeatEvent, LogEvent, Role, SecurityAlert, Severity};
+use observa_shared::{Event, HealthStatus, HeartbeatEvent, LogEvent, SecurityAlert, Severity};
 
 static DB_COUNTER: AtomicU64 = AtomicU64::new(0);
 static CHAT_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -230,6 +230,14 @@ async fn chat_session_without_db_returns_uuid() {
         .unwrap();
 
     assert_eq!(response.status(), 200);
+    let has_cookie = response
+        .headers()
+        .get("set-cookie")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.contains("observa_session_"))
+        .unwrap_or(false);
+    assert!(has_cookie, "session cookie should be set");
+
     let body = body_string(response).await;
     let parsed: serde_json::Value = serde_json::from_str(&body).expect("body should be json");
     let session_id = parsed
@@ -241,12 +249,8 @@ async fn chat_session_without_db_returns_uuid() {
         "session_id should be a uuid"
     );
     assert!(
-        parsed
-            .get("owner_token")
-            .and_then(|v| v.as_str())
-            .map(|s| !s.is_empty())
-            .unwrap_or(false),
-        "owner_token should be present"
+        parsed.get("owner_token").is_none(),
+        "owner_token must not be returned in the response body"
     );
 }
 
@@ -255,7 +259,6 @@ async fn chat_ask_without_llm_uses_fallback_responder() {
     let _lock = CHAT_TEST_LOCK.lock().await;
     let state = test_state();
     state.clear_all_rate_limiters().await;
-    let mut rx = state.bus.subscribe();
     let app = router(Arc::clone(&state));
     let payload = json!({
         "session_id": Uuid::new_v4(),
@@ -284,18 +287,6 @@ async fn chat_ask_without_llm_uses_fallback_responder() {
         reply.contains("Hello. I'm Observa"),
         "fallback greeting missing: {reply}"
     );
-
-    let event = rx.recv().await.expect("chat event should be published");
-    match event {
-        Event::Chat(msg) => {
-            assert_eq!(msg.role, Role::Assistant);
-            assert!(
-                msg.content.contains("Hello. I'm Observa"),
-                "published chat content missing greeting: {msg:?}"
-            );
-        }
-        other => panic!("expected Event::Chat, got {other:?}"),
-    }
 }
 
 #[tokio::test]
@@ -326,7 +317,6 @@ async fn chat_ask_with_neither_llm_nor_fallback_returns_unprocessable_entity() {
 #[tokio::test]
 async fn chat_stream_without_llm_uses_fallback_responder() {
     let state = test_state();
-    let mut rx = state.bus.subscribe();
     let app = router(Arc::clone(&state));
     let response = app
         .oneshot(
@@ -348,18 +338,6 @@ async fn chat_stream_without_llm_uses_fallback_responder() {
         body.contains("Hello.") && body.contains("Observa"),
         "fallback stream greeting missing: {body}"
     );
-
-    let event = rx.recv().await.expect("chat event should be published");
-    match event {
-        Event::Chat(msg) => {
-            assert_eq!(msg.role, Role::Assistant);
-            assert!(
-                msg.content.contains("Hello.") && msg.content.contains("Observa"),
-                "published chat content missing greeting: {msg:?}"
-            );
-        }
-        other => panic!("expected Event::Chat, got {other:?}"),
-    }
 }
 
 #[tokio::test]

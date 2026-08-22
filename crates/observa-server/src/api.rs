@@ -63,11 +63,9 @@ struct StatusResponse {
     health: HealthStatus,
     heartbeat_seq: u64,
     insight: Option<InsightSnapshot>,
-    llm_ok: bool,
     retention_days: u64,
     stored_metrics: usize,
     stored_logs: usize,
-    compression_enabled: bool,
 }
 
 async fn status(
@@ -85,11 +83,9 @@ async fn status(
         health: state.background.health().await,
         heartbeat_seq: state.background.next_heartbeat_seq() - 1,
         insight: state.background.insight().await,
-        llm_ok: state.llm.is_some(),
         retention_days: state.config.retention_days,
         stored_metrics,
         stored_logs,
-        compression_enabled: state.config.compression_enabled,
     })
     .into_response()
 }

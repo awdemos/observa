@@ -199,6 +199,7 @@ async fn spawn_test_app() -> TestApp {
 fn http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
+        .cookie_store(true)
         .build()
         .expect("http client should build")
 }
@@ -332,16 +333,11 @@ async fn qa_4_chat_ask_stores_session_and_returns_reply() {
         .get("session_id")
         .and_then(|v| v.as_str())
         .expect("session_id should be present");
-    let owner_token = session
-        .get("owner_token")
-        .and_then(|v| v.as_str())
-        .expect("owner_token should be present");
 
     let ask = client
         .post(format!("{}/api/chat/ask", app.base_url))
         .json(&json!({
             "session_id": session_id,
-            "owner_token": owner_token,
             "message": "ping"
         }))
         .send()
@@ -363,9 +359,10 @@ async fn qa_4_chat_ask_stores_session_and_returns_reply() {
     );
 
     // Verify the exchange was persisted by reading via the chat partial.
+    // The owner token travels in the HttpOnly cookie set by /api/chat/session.
     let partial = client
         .get(format!(
-            "{}/partials/chat?session_id={session_id}&owner_token={owner_token}",
+            "{}/partials/chat?session_id={session_id}",
             app.base_url
         ))
         .send()

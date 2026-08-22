@@ -3,7 +3,7 @@
 {% block title %}Assistant | Observa{% endblock title %}
 
 {% block content %}
-<section class="panel chat-panel" data-session="{{ session_id }}" data-owner-token="{{ owner_token }}">
+<section class="panel chat-panel" data-session="{{ session_id }}">
   <div class="section-header">
     <h2>Assistant</h2>
   </div>
@@ -13,10 +13,8 @@
 
   <form id="chat-form"
         class="chat-form"
-        data-session="{{ session_id }}"
-        data-owner-token="{{ owner_token }}">
+        data-session="{{ session_id }}">
     <input type="hidden" name="session_id" value="{{ session_id }}">
-    <input type="hidden" name="owner_token" value="{{ owner_token }}">
     <input id="chat-input" type="text" name="message" placeholder="Ask Observa…" aria-label="Message" required autocomplete="off">
     <button type="submit">Send</button>
     <span id="chat-spinner" class="spinner" aria-hidden="true">●</span>

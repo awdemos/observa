@@ -7,6 +7,10 @@ llm_model = "llama"
 sample_interval_ms = 2000
 log_source = "journald"
 log_tail = true
+# Optional: expose a table of open listening ports on the Network page.
+# Disabled by default because enumerating ports can be noisy and exposes local state.
+# expose_ports_page = false
+
 # Optional: extra AI inference endpoints to probe for the AI Servers page.
 # Defaults include common Docker Compose service names and host loopback ports.
 # ai_server_endpoints = ["llama-server:8080", "ollama:11434"]

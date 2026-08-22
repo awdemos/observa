@@ -37,7 +37,7 @@ pub fn parse_journalctl_json(line: &str) -> Result<Option<LogEvent>> {
         .and_then(parse_journal_timestamp)
         .unwrap_or_else(Utc::now);
 
-    let message = entry.message.unwrap_or_default();
+    let message = sanitize_log_message(&entry.message.unwrap_or_default());
     let severity = entry
         .priority
         .as_deref()
@@ -79,7 +79,7 @@ fn map_journal_priority(value: &str) -> Option<Severity> {
 /// No structured parsing is attempted; the whole line becomes the message and
 /// the severity defaults to `Info`.
 pub fn parse_fallback_line(line: &str) -> Result<LogEvent> {
-    let message = line.trim().to_string();
+    let message = sanitize_log_message(line.trim());
     let security = is_security_event(&message, "", "file");
     Ok(LogEvent {
         ts: Utc::now(),
@@ -90,6 +90,37 @@ pub fn parse_fallback_line(line: &str) -> Result<LogEvent> {
         raw: None,
         security,
     })
+}
+
+/// Strip ANSI escape sequences and non-printable control characters from a
+/// log message while preserving normal whitespace. This prevents terminal
+/// escape sequences from polluting stored logs, rendered HTML, and LLM context.
+fn sanitize_log_message(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            // ANSI CSI sequence: ESC [ ... letter
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                while let Some(&c) = chars.peek() {
+                    chars.next();
+                    if c.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        if ch == '\u{7f}' {
+            continue;
+        }
+        if ch.is_control() && ch != '\t' && ch != '\n' && ch != '\r' {
+            continue;
+        }
+        out.push(ch);
+    }
+    out
 }
 
 const SECURITY_PATTERNS: [&str; 12] = [
