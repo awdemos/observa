@@ -10,22 +10,22 @@
     <div class="metric-value" id="ai-server-count-value">{{ server_count }}</div>
     <div class="metric-detail">Hosted models detected</div>
   </div>
-  <div class="metric-tile" data-metric="ai-cpu">
-    <div class="metric-label">Combined CPU</div>
-    <div class="metric-value" id="ai-server-cpu-value">{{ servers | map(attribute="cpu_pct_num") | sum | round(method="floor", precision=1) }}%</div>
-    <div class="metric-detail">Across all inference engines</div>
+  <div class="metric-tile" data-metric="ai-online">
+    <div class="metric-label">Online</div>
+    <div class="metric-value" id="ai-server-online-value">{{ online_count }}</div>
+    <div class="metric-detail">Reachable endpoints</div>
   </div>
-  <div class="metric-tile" data-metric="ai-mem">
-    <div class="metric-label">Combined Memory</div>
-    <div class="metric-value" id="ai-server-mem-value">{{ servers | map(attribute="memory_bytes") | sum }}</div>
-    <div class="metric-detail">Total resident memory</div>
+  <div class="metric-tile" data-metric="ai-offline">
+    <div class="metric-label">Offline</div>
+    <div class="metric-value" id="ai-server-offline-value">{{ offline_count }}</div>
+    <div class="metric-detail">Unreachable endpoints</div>
   </div>
 </section>
 
 <section class="panel panel-compact">
   <div class="section-header">
     <h2>Inference Engine Constellation</h2>
-    <span class="section-meta">vLLM, Ollama, Triton, OpenAI, and more</span>
+    <span class="section-meta">vLLM, Ollama, Exo Labs, Triton, OpenAI, and more</span>
   </div>
   <div class="three-viz" data-three-viz="aiServers" id="ai-servers-viz"
        data-server-count="{{ server_count }}"
@@ -48,16 +48,18 @@
       <div class="verify-table-wrapper">
         <table class="verify-table">
           <thead>
-            <tr><th>Kind</th><th>Name</th><th>PID</th><th>CPU %</th><th>Memory</th><th>Endpoint</th></tr>
+            <tr><th>Kind</th><th>Name</th><th>Status</th><th>PID</th><th>CPU %</th><th>Memory</th><th>Latency</th><th>Endpoint</th></tr>
           </thead>
           <tbody>
             {% for s in servers %}
             <tr>
               <td>{{ s.kind }}</td>
               <td>{{ s.name }}</td>
-              <td class="mono">{{ s.pid }}</td>
+              <td class="{{ s.status_class }}">{{ s.status }}</td>
+              <td class="mono">{{ s.pid | default(value="—") }}</td>
               <td class="mono">{{ s.cpu_pct }}</td>
               <td class="mono">{{ s.memory }}</td>
+              <td class="mono">{{ s.latency_ms | default(value="—") }}</td>
               <td class="mono">{{ s.endpoint | default(value="—") }}</td>
             </tr>
             {% endfor %}
@@ -70,7 +72,7 @@
 {% else %}
 <section class="panel empty-state">
   <h2>No AI model servers detected</h2>
-  <p>Observa scans for vLLM, Ollama, Triton, OpenAI-compatible, SGLang, Llama.cpp, ExLlamaV2, KoboldCpp, TabbyAPI, LM Studio, TGI, and generic Python inference processes.</p>
+  <p>Observa scans for vLLM, Ollama, Exo Labs clusters, Triton, OpenAI-compatible, SGLang, Llama.cpp, ExLlamaV2, KoboldCpp, TabbyAPI, LM Studio, TGI, and generic Python inference processes.</p>
 </section>
 {% endif %}
 {% endblock content %}

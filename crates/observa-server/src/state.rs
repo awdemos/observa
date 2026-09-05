@@ -15,6 +15,7 @@ use parking_lot::Mutex;
 use tera::Tera;
 use tokio::sync::RwLock;
 
+use crate::ai_poll::AiServerCache;
 use crate::paths::workspace_root;
 use crate::store::{ChatStore, DbCacheStore, DbChatStore, MetricStore};
 
@@ -60,6 +61,7 @@ pub struct AppState {
     pub tera: Tera,
     pub background: Arc<BackgroundState>,
     pub rate_limiters: Arc<Mutex<HashMap<String, RateLimiterInner>>>,
+    pub ai_servers: AiServerCache,
 }
 
 #[derive(Clone)]
@@ -233,6 +235,7 @@ impl AppState {
         let chat_store: Arc<dyn ChatStore> = Arc::new(DbChatStore::new(db.clone()));
         let background = Arc::new(BackgroundState::new());
         let rate_limiters = Arc::new(Mutex::new(HashMap::new()));
+        let ai_servers = Arc::new(RwLock::new(Vec::new()));
 
         Ok(Self {
             config,
@@ -247,6 +250,7 @@ impl AppState {
             tera,
             background,
             rate_limiters,
+            ai_servers,
         })
     }
 

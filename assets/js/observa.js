@@ -96,6 +96,9 @@
         await showAlertToast(data);
         refreshSecurityPanel();
       });
+      s.addEventListener('ai-server', () => {
+        refreshAiServersPanel();
+      });
       s.addEventListener('error', () => {
         setSseStatus('disconnected');
         s.close();
@@ -287,6 +290,12 @@
     if (!rows) return;
     preserveLogExplanations(rows);
     htmx.ajax('GET', '/partials/security', { target: '#security-rows', swap: 'innerHTML' });
+  }
+
+  function refreshAiServersPanel() {
+    const cards = el('ai-server-cards');
+    if (!cards) return;
+    htmx.ajax('GET', '/partials/ai-servers', { target: '#ai-server-cards', swap: 'innerHTML' });
   }
 
   const EXPLANATION_TTL_MS = 60_000;

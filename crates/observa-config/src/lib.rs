@@ -3,7 +3,7 @@ pub mod config;
 pub mod shutdown;
 
 pub use cli::Cli;
-pub use config::Config;
+pub use config::{AiServerConfig, Config};
 pub use observa_shared::LogSource;
 pub use shutdown::shutdown_signal;
 
