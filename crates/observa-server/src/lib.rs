@@ -1,3 +1,4 @@
+pub mod ai_poll;
 pub mod api;
 pub mod auth;
 pub mod background;

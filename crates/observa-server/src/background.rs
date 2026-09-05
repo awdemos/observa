@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
@@ -37,7 +38,13 @@ pub fn spawn_background_tasks(
         spawn_alerting(state.clone(), shutdown.clone()),
         spawn_insight_digest(state.clone(), shutdown.clone()),
         spawn_maintenance(state.clone(), shutdown.clone()),
-        spawn_notifications(state, shutdown),
+        spawn_notifications(state.clone(), shutdown.clone()),
+        crate::ai_poll::spawn_ai_server_poller(
+            Arc::new(state.config.clone()),
+            state.ai_servers.clone(),
+            state.bus.clone(),
+            shutdown,
+        ),
     ]
 }
 

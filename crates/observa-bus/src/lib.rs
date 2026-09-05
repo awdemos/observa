@@ -67,6 +67,7 @@ const fn event_name(event: &Event) -> &'static str {
         Event::Chat(_) => "chat",
         Event::Heartbeat(_) => "heartbeat",
         Event::Alert(_) => "alert",
+        Event::AiServer(_) => "ai-server",
     }
 }
 
@@ -117,4 +118,19 @@ pub fn sse_stream(
     });
 
     axum::response::sse::Sse::new(stream)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use observa_shared::{AiServerEvent, AiServerStatus};
+
+    #[test]
+    fn event_name_for_ai_server() {
+        let event = Event::AiServer(AiServerEvent {
+            endpoint: "http://localhost:11434/v1".to_string(),
+            status: AiServerStatus::Online,
+        });
+        assert_eq!(event_name(&event), "ai-server");
+    }
 }

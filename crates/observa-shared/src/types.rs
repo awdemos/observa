@@ -80,20 +80,44 @@ pub enum AiServerKind {
     TabbyApi,
     LmStudio,
     TextGenerationInference,
+    Exo,
     #[default]
     Generic,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AiServerStatus {
+    #[default]
+    Unknown,
+    Online,
+    Offline,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AiServerEvent {
+    pub endpoint: String,
+    pub status: AiServerStatus,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AiServerMetrics {
-    pub pid: u32,
+    pub pid: Option<u32>,
     pub kind: AiServerKind,
     pub name: String,
     pub port_hint: Option<u16>,
     #[serde(default)]
     pub endpoint: Option<String>,
     #[serde(default)]
+    pub status: AiServerStatus,
+    #[serde(default)]
+    pub latency_ms: Option<u64>,
+    #[serde(default)]
     pub models: Vec<String>,
+    #[serde(default)]
+    pub cluster_nodes: Option<Vec<String>>,
+    #[serde(default)]
+    pub last_error: Option<String>,
     pub cpu_percent: f32,
     pub memory_bytes: u64,
 }
@@ -221,6 +245,7 @@ pub enum Event {
     Chat(ChatMessage),
     Heartbeat(HeartbeatEvent),
     Alert(SecurityAlert),
+    AiServer(AiServerEvent),
 }
 
 pub fn format_bytes(n: u64) -> String {
@@ -284,5 +309,19 @@ impl Event {
 
     pub const fn is_alert(&self) -> bool {
         matches!(self, Event::Alert(_))
+    }
+
+    pub const fn is_ai_server(&self) -> bool {
+        matches!(self, Event::AiServer(_))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ai_server_status_defaults_to_unknown() {
+        assert_eq!(AiServerStatus::default(), AiServerStatus::Unknown);
     }
 }

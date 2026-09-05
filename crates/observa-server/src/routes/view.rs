@@ -189,7 +189,7 @@ pub struct GpuCard {
 pub struct AiServerCard {
     pub kind: String,
     pub name: String,
-    pub pid: u32,
+    pub pid: Option<u32>,
     pub cpu_pct: String,
     pub cpu_pct_num: f32,
     pub memory: String,
@@ -197,6 +197,12 @@ pub struct AiServerCard {
     pub port_hint: Option<u16>,
     pub endpoint: Option<String>,
     pub models: Vec<String>,
+    pub status: String,
+    pub status_class: String,
+    pub latency_ms: Option<u64>,
+    pub last_error: Option<String>,
+    pub is_remote: bool,
+    pub cluster_nodes: Option<Vec<String>>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -345,7 +351,17 @@ impl NetworkCombined {
 
 impl AiServerCard {
     pub fn from_ai_server(s: &AiServerMetrics) -> Self {
-        let endpoint = s.endpoint.clone().or_else(|| s.port_hint.map(|p| format!("http://127.0.0.1:{}", p)));
+        let endpoint = s
+            .endpoint
+            .clone()
+            .or_else(|| s.port_hint.map(|p| format!("http://127.0.0.1:{}", p)));
+        let status = format!("{:?}", s.status).to_lowercase();
+        let status_class = match s.status {
+            observa_shared::AiServerStatus::Online => "status-online",
+            observa_shared::AiServerStatus::Offline => "status-offline",
+            observa_shared::AiServerStatus::Unknown => "status-unknown",
+        }
+        .to_string();
         Self {
             kind: format!("{:?}", s.kind),
             name: s.name.clone(),
@@ -357,6 +373,12 @@ impl AiServerCard {
             port_hint: s.port_hint,
             endpoint,
             models: s.models.clone(),
+            status,
+            status_class,
+            latency_ms: s.latency_ms,
+            last_error: s.last_error.clone(),
+            is_remote: s.pid.is_none(),
+            cluster_nodes: s.cluster_nodes.clone(),
         }
     }
 }
