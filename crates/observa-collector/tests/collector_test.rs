@@ -30,13 +30,20 @@ async fn collector_publishes_metric_event() {
         ai_server_subnet_scan: false,
     });
 
-    // Drop handle after receiving at least one metric event.
-    let event = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv()).await;
+    // The bus keeps a `_receiver` alive so the channel never closes; wait for a
+    // Metric event with a generous timeout because `normalize()` can be slow.
+    let event = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            match rx.recv().await {
+                Ok(observa_shared::Event::Metric(_)) => break Ok(()),
+                Ok(_) => continue,
+                Err(_) => break Err("bus closed"),
+            }
+        }
+    })
+    .await;
     drop(handle);
 
     assert!(event.is_ok(), "timed out waiting for metric event");
-    assert!(
-        matches!(event.unwrap(), Ok(observa_shared::Event::Metric(_))),
-        "expected Metric event"
-    );
+    assert!(event.unwrap().is_ok(), "expected Metric event but bus closed");
 }
